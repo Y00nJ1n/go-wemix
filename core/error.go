@@ -96,4 +96,16 @@ var (
 
 	// ErrSenderNoEOA is returned if the sender of a transaction is a contract.
 	ErrSenderNoEOA = errors.New("sender not an eoa")
+
+	// fee delegate
+	// ErrInvalidFeePayer is returned if the transaction contains an invalid signature.
+	ErrInvalidFeePayer = errors.New("invalid feepayer")
+
+	// ErrFeePayerInsufficientFunds is returned if the total cost of executing a transaction
+	// is higher than the balance of the feepayer's account.
+	ErrFeePayerInsufficientFunds = errors.New("feepayer insufficient funds for gas * price + value")
+
+	// ErrMaxFeeLimit is returned if the transaction fee
+	// exceeds the MaxFeeLimit of the FeePayer
+	ErrMaxFeeLimit = errors.New("exceeds the maxfeelimit of the feepayer")
 )

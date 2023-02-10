@@ -682,8 +682,36 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
-	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
-		return ErrInsufficientFunds
+
+	// fee delegate
+	if tx.Type() == types.FeeDelegateDynamicFeeTxType || tx.Type() == types.FeeDelegateLegacyTxType {
+		//log.Info("validateTx", "tx.MaxFeeLimit()", tx.MaxFeeLimit(), "tx.Cost()", tx.Cost())
+		//if tx.MaxFeeLimit().Cmp(tx.Cost()) < 0 {
+		//	return ErrMaxFeeLimit
+		//}
+		// Make sure the transaction is signed properly.
+		feepayer, err := types.FeePayerSender(types.NewfeePayerSigner(pool.chainconfig.ChainID), tx)
+		log.Info("validateTx", "tx.FeePayer()", tx.FeePayer(), "feepayer", feepayer)
+		if *tx.FeePayer() != feepayer || err != nil {
+			return ErrInvalidFeePayer
+		}
+		if pool.currentState.GetBalance(feepayer).Cmp(tx.Cost()) < 0 {
+			log.Info("validateTx", "pool.currentState.GetBalance(feepayer)", pool.currentState.GetBalance(feepayer), "feepayer", feepayer)
+			return ErrFeePayerInsufficientFunds
+		}
+		if pool.currentState.GetBalance(from).Cmp(tx.Value()) < 0 {
+			log.Info("validateTx", "pool.currentState.GetBalance(from)", pool.currentState.GetBalance(from), "from", from)
+			return ErrInsufficientFunds
+		}
+	} else {
+		if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+			log.Info("validateTx", "pool.currentState.GetBalance(from)", pool.currentState.GetBalance(from), "from", from)
+			return ErrInsufficientFunds
+		}
+	}
+	// Ensure the transaction adheres to nonce ordering
+	if pool.currentState.GetNonce(from) > tx.Nonce() {
+		return ErrNonceTooLow
 	}
 	// Ensure the transaction has more gas than the basic tx fee.
 	intrGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul)

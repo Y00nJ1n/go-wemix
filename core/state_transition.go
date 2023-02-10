@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	wemixminer "github.com/ethereum/go-ethereum/wemix/miner"
 )
@@ -80,6 +81,9 @@ type Message interface {
 	IsFake() bool
 	Data() []byte
 	AccessList() types.AccessList
+	// fee delegate
+	MaxFeeLimit() *big.Int
+	FeePayer() *common.Address
 }
 
 // ExecutionResult includes all output after executing given evm
@@ -202,16 +206,34 @@ func (st *StateTransition) buyGas() error {
 		balanceCheck = balanceCheck.Mul(balanceCheck, st.gasFeeCap)
 		balanceCheck.Add(balanceCheck, st.value)
 	}
-	if have, want := st.state.GetBalance(st.msg.From()), balanceCheck; have.Cmp(want) < 0 {
-		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
-	}
-	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
-		return err
-	}
-	st.gas += st.msg.Gas()
+	// fee delegate
+	if st.msg.FeePayer() != nil {
+		feepayer := *st.msg.FeePayer()
+		if have, want := st.state.GetBalance(feepayer), mgval; have.Cmp(want) < 0 {
+			return fmt.Errorf("%w: feepayer address %v have %v want %v", ErrInsufficientFunds, feepayer.Hex(), have, want)
+		}
+		if have, want := st.state.GetBalance(st.msg.From()), st.value; have.Cmp(want) < 0 {
+			return fmt.Errorf("%w: sender address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
+		}
+		if err := st.gp.SubGas(st.msg.Gas()); err != nil {
+			return err
+		}
+		st.gas += st.msg.Gas()
 
-	st.initialGas = st.msg.Gas()
-	st.state.SubBalance(st.msg.From(), mgval)
+		st.initialGas = st.msg.Gas()
+		st.state.SubBalance(feepayer, mgval)
+	} else {
+		if have, want := st.state.GetBalance(st.msg.From()), balanceCheck; have.Cmp(want) < 0 {
+			return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
+		}
+		if err := st.gp.SubGas(st.msg.Gas()); err != nil {
+			return err
+		}
+		st.gas += st.msg.Gas()
+
+		st.initialGas = st.msg.Gas()
+		st.state.SubBalance(st.msg.From(), mgval)
+	}
 	return nil
 }
 
@@ -316,6 +338,20 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	st.gas -= gas
 
+	// fee delegate
+	// Check feepayer MaxFeeLimit before execution contract
+	//if st.msg.FeePayer() != nil {
+	//	maxfeelimt := st.msg.MaxFeeLimit()
+	//	if maxfeelimt == nil {
+	//		return nil, fmt.Errorf("error msg.maxfeelimit is nil")
+	//	}
+	//	calculatemaxfee := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
+	//	log.Info("check before maxfeelimt", "maxfeelimt", maxfeelimt, "bigFee", calculatemaxfee)
+	//	if maxfeelimt.Cmp(calculatemaxfee) < 0 {
+	//		return nil, fmt.Errorf("%w: maxfee: %d, maxfeelimt: %d", ErrMaxFeeLimit, calculatemaxfee, maxfeelimt)
+	//	}
+	//}
+
 	// Check clause 6
 	if msg.Value().Sign() > 0 && !st.evm.Context.CanTransfer(st.state, msg.From(), msg.Value()) {
 		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From().Hex())
@@ -350,6 +386,19 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	bigFee := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip)
 
+	// fee delegate
+	// Check feepayer MaxFeeLimit after execution contract
+	if st.msg.FeePayer() != nil {
+		maxfeelimt := st.msg.MaxFeeLimit()
+		log.Info("check after maxfeelimt", "maxfeelimt", maxfeelimt, "bigFee", bigFee)
+		if maxfeelimt == nil {
+			return nil, fmt.Errorf("error msg.maxfeelimit is nil")
+		}
+		if maxfeelimt.Cmp(bigFee) < 0 {
+			return nil, fmt.Errorf("%w: bigFee: %d, maxfeelimt: %d", ErrMaxFeeLimit, bigFee, maxfeelimt)
+		}
+	}
+
 	// In wemix, block reward and fees are combined and distributed as
 	// agreed in the governance contract
 	if wemixminer.IsPoW() {
@@ -374,8 +423,17 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
-	st.state.AddBalance(st.msg.From(), remaining)
 
+	// fee delegate
+	if st.msg.FeePayer() != nil {
+		log.Info("refundGas", "feepayer", *st.msg.FeePayer(), "bal", st.state.GetBalance(*st.msg.FeePayer()), "remaining", remaining)
+		st.state.AddBalance(*st.msg.FeePayer(), remaining)
+	} else {
+		if remaining.Cmp(new(big.Int).SetUint64(0)) > 0 {
+			log.Info("refundGas", "from", st.msg.From(), "bal", st.state.GetBalance(st.msg.From()), "remaining", remaining)
+		}
+		st.state.AddBalance(st.msg.From(), remaining)
+	}
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.
 	st.gp.AddGas(st.gas)

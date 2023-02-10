@@ -45,6 +45,8 @@ const (
 	LegacyTxType = iota
 	AccessListTxType
 	DynamicFeeTxType
+	FeeDelegateDynamicFeeTxType = iota + 20 // fee delegate
+	FeeDelegateLegacyTxType
 )
 
 // Transaction is an Ethereum transaction.
@@ -53,9 +55,10 @@ type Transaction struct {
 	time  time.Time // Time first seen locally (spam avoidance)
 
 	// caches
-	hash atomic.Value
-	size atomic.Value
-	from atomic.Value
+	hash     atomic.Value
+	size     atomic.Value
+	from     atomic.Value
+	feepayer atomic.Value // fee delegate
 }
 
 type TransactionEx struct {
@@ -90,6 +93,10 @@ type TxData interface {
 
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
+	// fee delegate
+	maxfeelimit() *big.Int
+	feePayer() *common.Address
+	rawFeePayerSignatureValues() (v, r, s *big.Int)
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -189,6 +196,15 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		var inner DynamicFeeTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
+		// fee delegate
+	case FeeDelegateDynamicFeeTxType:
+		var inner FeeDelegateDynamicFeeTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
+	case FeeDelegateLegacyTxType:
+		var inner FeeDelegateLegacyTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
@@ -283,6 +299,13 @@ func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value
 
 // Nonce returns the sender account nonce of the transaction.
 func (tx *Transaction) Nonce() uint64 { return tx.inner.nonce() }
+
+// fee delegate
+func (tx *Transaction) MaxFeeLimit() *big.Int     { return tx.inner.maxfeelimit() }
+func (tx *Transaction) FeePayer() *common.Address { return tx.inner.feePayer() }
+func (tx *Transaction) RawFeePayerSignatureValues() (v, r, s *big.Int) {
+	return tx.inner.rawFeePayerSignatureValues()
+}
 
 // To returns the recipient address of the transaction.
 // For contract-creation transactions, To returns nil.
@@ -627,6 +650,9 @@ type Message struct {
 	data       []byte
 	accessList AccessList
 	isFake     bool
+	// fee delegate
+	maxfeelimit *big.Int
+	feepayer    *common.Address
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isFake bool) Message {
@@ -659,6 +685,13 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 		accessList: tx.AccessList(),
 		isFake:     false,
 	}
+	// fee delegate
+	if tx.MaxFeeLimit() != nil {
+		msg.maxfeelimit = new(big.Int).Set(tx.MaxFeeLimit())
+	}
+	if tx.FeePayer() != nil {
+		msg.feepayer = tx.FeePayer()
+	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
 		msg.gasPrice = math.BigMin(msg.gasPrice.Add(msg.gasTipCap, baseFee), msg.gasFeeCap)
@@ -679,6 +712,10 @@ func (m Message) Nonce() uint64          { return m.nonce }
 func (m Message) Data() []byte           { return m.data }
 func (m Message) AccessList() AccessList { return m.accessList }
 func (m Message) IsFake() bool           { return m.isFake }
+
+// fee delegate
+func (m Message) MaxFeeLimit() *big.Int     { return m.maxfeelimit }
+func (m Message) FeePayer() *common.Address { return m.feepayer }
 
 // copyAddressPtr copies an address.
 func copyAddressPtr(a *common.Address) *common.Address {

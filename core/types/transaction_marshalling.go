@@ -48,6 +48,12 @@ type txJSON struct {
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
+	// fee delegate
+	MaxFeeLimit *hexutil.Big    `json:"maxFeeLimit,omitempty"`
+	FeePayer    *common.Address `json:"feePayer,omitempty"`
+	FV          *hexutil.Big    `json:"fv,omitempty"`
+	FR          *hexutil.Big    `json:"fr,omitempty"`
+	FS          *hexutil.Big    `json:"fs,omitempty"`
 }
 
 // MarshalJSON marshals as JSON with a hash.
@@ -94,6 +100,51 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
+	// fee delegate
+	case *FeeDelegateDynamicFeeTx:
+		nonce := tx.SenderTx.nonce()
+		enc.Nonce = (*hexutil.Uint64)(&nonce)
+		gas := tx.SenderTx.gas()
+		enc.Gas = (*hexutil.Uint64)(&gas)
+		enc.ChainID = (*hexutil.Big)(tx.SenderTx.chainID())
+		accessList := tx.SenderTx.accessList()
+		enc.AccessList = &accessList
+		enc.MaxFeePerGas = (*hexutil.Big)(tx.SenderTx.gasFeeCap())
+		enc.MaxPriorityFeePerGas = (*hexutil.Big)(tx.SenderTx.gasTipCap())
+		enc.Value = (*hexutil.Big)(tx.SenderTx.value())
+		data := tx.SenderTx.data()
+		enc.Data = (*hexutil.Bytes)(&data)
+		enc.To = tx.SenderTx.to()
+		v, r, s := tx.SenderTx.rawSignatureValues()
+		enc.V = (*hexutil.Big)(v)
+		enc.R = (*hexutil.Big)(r)
+		enc.S = (*hexutil.Big)(s)
+
+		enc.MaxFeeLimit = (*hexutil.Big)(tx.MaxFeeLimit)
+		enc.FeePayer = tx.FeePayer
+		enc.FV = (*hexutil.Big)(tx.FV)
+		enc.FR = (*hexutil.Big)(tx.FR)
+		enc.FS = (*hexutil.Big)(tx.FS)
+	case *FeeDelegateLegacyTx:
+		nonce := tx.SenderTx.nonce()
+		enc.Nonce = (*hexutil.Uint64)(&nonce)
+		gas := tx.SenderTx.gas()
+		enc.Gas = (*hexutil.Uint64)(&gas)
+		enc.GasPrice = (*hexutil.Big)(tx.SenderTx.gasPrice())
+		enc.Value = (*hexutil.Big)(tx.SenderTx.value())
+		data := tx.SenderTx.data()
+		enc.Data = (*hexutil.Bytes)(&data)
+		enc.To = tx.SenderTx.to()
+		v, r, s := tx.SenderTx.rawSignatureValues()
+		enc.V = (*hexutil.Big)(v)
+		enc.R = (*hexutil.Big)(r)
+		enc.S = (*hexutil.Big)(s)
+
+		enc.MaxFeeLimit = (*hexutil.Big)(tx.MaxFeeLimit)
+		enc.FeePayer = tx.FeePayer
+		enc.FV = (*hexutil.Big)(tx.FV)
+		enc.FR = (*hexutil.Big)(tx.FR)
+		enc.FS = (*hexutil.Big)(tx.FS)
 	}
 	return json.Marshal(&enc)
 }

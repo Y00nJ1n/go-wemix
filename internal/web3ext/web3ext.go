@@ -696,6 +696,19 @@ web3._extend({
 			call: 'eth_getLogs',
 			params: 1,
 		}),
+        // fee delegate
+		new web3._extend.Method({
+			name: 'signFeeDelegateTransaction',
+			call: 'eth_signFeeDelegateTransaction',
+			params: 1,
+			//inputFormatter: [web3._extend.formatters.inputTransactionFormatter,web3._extend.formatters.inputAddressFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'signRawFeeDelegateTransaction',
+			call: 'eth_signRawFeeDelegateTransaction',
+			params: 2,
+			//inputFormatter: [web3._extend.formatters.inputTransactionFormatter,web3._extend.formatters.inputAddressFormatter]
+		}),
 	],
 	properties: [
 		new web3._extend.Property({
@@ -837,7 +850,14 @@ web3._extend({
 			name: 'initializeWallet',
 			call: 'personal_initializeWallet',
 			params: 1
-		})
+		}),
+        // fee delegate
+        new web3._extend.Method({
+			name: 'signRawFeeDelegateTransaction',
+			call: 'personal_signRawFeeDelegateTransaction',
+			params: 3,
+			//inputFormatter: [web3._extend.formatters.inputTransactionFormatter,web3._extend.formatters.inputAddressFormatter]
+		}),
 	],
 	properties: [
 		new web3._extend.Property({

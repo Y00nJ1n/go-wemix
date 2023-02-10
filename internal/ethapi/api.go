@@ -447,6 +447,11 @@ func (s *PrivateAccountAPI) LockAccount(addr common.Address) bool {
 func (s *PrivateAccountAPI) signTransaction(ctx context.Context, args *TransactionArgs, passwd string) (*types.Transaction, error) {
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: args.from()}
+	// fee delegate
+	if args.FeePayer != nil {
+		account = accounts.Account{Address: *args.FeePayer}
+	}
+
 	wallet, err := s.am.Find(account)
 	if err != nil {
 		return nil, err
@@ -1285,6 +1290,12 @@ type RPCTransaction struct {
 	V                *hexutil.Big      `json:"v"`
 	R                *hexutil.Big      `json:"r"`
 	S                *hexutil.Big      `json:"s"`
+	// fee delegate
+	MaxFeeLimit *hexutil.Big    `json:"maxfeelimit,omitempty"`
+	FeePayer    *common.Address `json:"feepayer,omitempty"`
+	FV          *hexutil.Big    `json:"fv,omitempty"`
+	FR          *hexutil.Big    `json:"fr,omitempty"`
+	FS          *hexutil.Big    `json:"fs,omitempty"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
@@ -1331,6 +1342,16 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		} else {
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
+	}
+	// fee delegate
+	if tx.Type() == types.FeeDelegateDynamicFeeTxType || tx.Type() == types.FeeDelegateLegacyTxType {
+		result.MaxFeeLimit = (*hexutil.Big)(tx.MaxFeeLimit())
+		result.MaxFeeLimit = (*hexutil.Big)(tx.MaxFeeLimit())
+		result.FeePayer = tx.FeePayer()
+		fv, fr, fs := tx.RawFeePayerSignatureValues()
+		result.FV = (*hexutil.Big)(fv)
+		result.FR = (*hexutil.Big)(fr)
+		result.FS = (*hexutil.Big)(fs)
 	}
 	return result
 }
@@ -1685,13 +1706,28 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		return common.Hash{}, errors.New("only replay-protected (EIP-155) transactions allowed over RPC")
 	}
 	if err := b.SendTx(ctx, tx); err != nil {
+		log.Info("SubmitTransaction", "SendTx err=", err)
 		return common.Hash{}, err
 	}
 	// Print a log with full tx details for manual investigations and interventions
 	signer := types.MakeSigner(b.ChainConfig(), b.CurrentBlock().Number())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
+		log.Info("SubmitTransaction", "types.Sender err=", err)
 		return common.Hash{}, err
+	}
+	// fee delegate
+	if tx.Type() == types.FeeDelegateDynamicFeeTxType || tx.Type() == types.FeeDelegateLegacyTxType {
+		feepayersigner := types.NewfeePayerSigner(b.ChainConfig().ChainID)
+		feepayer, err := types.FeePayerSender(feepayersigner, tx)
+		if err != nil {
+			log.Info("SubmitTransaction", "types.FeePayerSender err=", err)
+			return common.Hash{}, err
+		}
+		if feepayer != *tx.FeePayer() {
+			log.Info("SubmitTransaction", "types.FeePayerSender err=", err)
+			return common.Hash{}, errors.New("FeePayer Signature error")
+		}
 	}
 
 	if tx.To() == nil {
@@ -1833,6 +1869,19 @@ func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args Tra
 	tx := args.toTransaction()
 	if err := checkTxFee(tx.GasPrice(), tx.Gas(), s.b.RPCTxFeeCap()); err != nil {
 		return nil, err
+	}
+	// fee delegate
+	if args.FeePayer != nil {
+		log.Info("SignTransaction", "FeePayer", args.FeePayer)
+		signed, err := s.sign(*args.FeePayer, tx)
+		if err != nil {
+			return nil, err
+		}
+		data, err := signed.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		return &SignTransactionResult{data, signed}, nil
 	}
 	signed, err := s.sign(args.from(), tx)
 	if err != nil {
@@ -2084,4 +2133,240 @@ func toHexSlice(b [][]byte) []string {
 		r[i] = hexutil.Encode(b[i])
 	}
 	return r
+}
+
+// fee delegate
+// SignFeeDelegateTransaction will sign the given feeDelegate transaction with the from account.
+// The node needs to have the private key of the account corresponding with
+// the given from address and it needs to be unlocked.
+func (s *PrivateAccountAPI) SignRawFeeDelegateTransaction(ctx context.Context, args TransactionArgs, input hexutil.Bytes, passwd string) (*SignTransactionResult, error) {
+	if args.FeePayer == nil {
+		return nil, fmt.Errorf("missing FeePayer")
+	}
+
+	// Look up the wallet containing the requested signer
+	account := accounts.Account{Address: *args.FeePayer}
+
+	wallet, err := s.am.Find(account)
+	if err != nil {
+		return nil, err
+	}
+	// Set some sanity defaults and terminate on failure
+	//if err := args.setDefaults(ctx, s.b); err != nil {
+	//	return nil, err
+	//}
+	if args.MaxFeeLimit == nil {
+		return nil, fmt.Errorf("missing MaxFeeLimit")
+	}
+	rawTx := new(types.Transaction)
+	if err := rawTx.UnmarshalBinary(input); err != nil {
+		return nil, err
+	}
+	log.Info("SignRawFeeDelegateTransaction", "rawTx", rawTx)
+	V, R, S := rawTx.RawSignatureValues()
+	if rawTx.Type() == types.DynamicFeeTxType {
+		SenderTx := types.DynamicFeeTx{
+			To:         rawTx.To(),
+			ChainID:    rawTx.ChainId(),
+			Nonce:      rawTx.Nonce(),
+			Gas:        rawTx.Gas(),
+			GasFeeCap:  rawTx.GasFeeCap(),
+			GasTipCap:  rawTx.GasTipCap(),
+			Value:      rawTx.Value(),
+			Data:       rawTx.Data(),
+			AccessList: rawTx.AccessList(),
+			V:          V,
+			R:          R,
+			S:          S,
+		}
+		log.Info("SignRawFeeDelegateTransaction", "SenderTx", SenderTx)
+		FeeDelegateDynamicFeeTx := &types.FeeDelegateDynamicFeeTx{
+			MaxFeeLimit: (*big.Int)(args.MaxFeeLimit),
+			FeePayer:    args.FeePayer,
+		}
+
+		FeeDelegateDynamicFeeTx.SetSenderTx(SenderTx)
+		tx := types.NewTx(FeeDelegateDynamicFeeTx)
+
+		log.Info("SignRawFeeDelegateTransaction", "FeeDelegateDynamicFeeTx=", FeeDelegateDynamicFeeTx)
+
+		signed, err := wallet.SignTxWithPassphrase(account, passwd, tx, s.b.ChainConfig().ChainID)
+
+		if err != nil {
+			return nil, err
+		}
+		data, err := signed.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+
+		return &SignTransactionResult{data, signed}, nil
+	}
+	if rawTx.Type() == types.LegacyTxType {
+		SenderTx := types.LegacyTx{
+			To:       rawTx.To(),
+			Nonce:    rawTx.Nonce(),
+			Gas:      rawTx.Gas(),
+			GasPrice: rawTx.GasPrice(),
+			Value:    rawTx.Value(),
+			Data:     rawTx.Data(),
+			V:        V,
+			R:        R,
+			S:        S,
+		}
+		log.Info("SignRawFeeDelegateTransaction", "SenderTx", SenderTx)
+		FeeDelegateLegacyTx := &types.FeeDelegateLegacyTx{
+			MaxFeeLimit: (*big.Int)(args.MaxFeeLimit),
+			FeePayer:    args.FeePayer,
+		}
+
+		FeeDelegateLegacyTx.SetSenderTx(SenderTx)
+		tx := types.NewTx(FeeDelegateLegacyTx)
+
+		log.Info("SignRawFeeDelegateTransaction", "FeeDelegateLegacyTx=", FeeDelegateLegacyTx)
+		log.Info("SignRawFeeDelegateTransaction", "s.b.ChainConfig().ChainID=", s.b.ChainConfig().ChainID)
+
+		signed, err := wallet.SignTxWithPassphrase(account, passwd, tx, s.b.ChainConfig().ChainID)
+
+		if err != nil {
+			return nil, err
+		}
+		data, err := signed.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+
+		return &SignTransactionResult{data, signed}, nil
+	}
+
+	return nil, fmt.Errorf("senderTx type error")
+}
+
+// fee delegate
+// SignFeeDelegateTransaction will sign the given feeDelegate transaction with the from account.
+// The node needs to have the private key of the account corresponding with
+// the given from address and it needs to be unlocked.
+func (s *PublicTransactionPoolAPI) SignRawFeeDelegateTransaction(ctx context.Context, args TransactionArgs, input hexutil.Bytes) (*SignTransactionResult, error) {
+	if args.FeePayer == nil {
+		return nil, fmt.Errorf("missing FeePayer")
+	}
+	if args.MaxFeeLimit == nil {
+		return nil, fmt.Errorf("missing MaxFeeLimit")
+	}
+
+	//if err := args.setDefaults(ctx, s.b); err != nil {
+	//	return nil, err
+	//}
+
+	rawTx := new(types.Transaction)
+	if err := rawTx.UnmarshalBinary(input); err != nil {
+		return nil, err
+	}
+	log.Info("SignRawFeeDelegateTransaction", "rawTx", rawTx)
+	V, R, S := rawTx.RawSignatureValues()
+	if rawTx.Type() == types.DynamicFeeTxType {
+		SenderTx := types.DynamicFeeTx{
+			To:         rawTx.To(),
+			ChainID:    rawTx.ChainId(),
+			Nonce:      rawTx.Nonce(),
+			Gas:        rawTx.Gas(),
+			GasFeeCap:  rawTx.GasFeeCap(),
+			GasTipCap:  rawTx.GasTipCap(),
+			Value:      rawTx.Value(),
+			Data:       rawTx.Data(),
+			AccessList: rawTx.AccessList(),
+			V:          V,
+			R:          R,
+			S:          S,
+		}
+		log.Info("SignRawFeeDelegateTransaction", "SenderTx", SenderTx)
+		FeeDelegateDynamicFeeTx := &types.FeeDelegateDynamicFeeTx{
+			MaxFeeLimit: (*big.Int)(args.MaxFeeLimit),
+			FeePayer:    args.FeePayer,
+		}
+
+		FeeDelegateDynamicFeeTx.SetSenderTx(SenderTx)
+		tx := types.NewTx(FeeDelegateDynamicFeeTx)
+
+		log.Info("SignRawFeeDelegateTransaction", "FeeDelegateDynamicFeeTx=", FeeDelegateDynamicFeeTx)
+
+		signed, err := s.sign(*args.FeePayer, tx)
+		if err != nil {
+			return nil, err
+		}
+		data, err := signed.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+
+		return &SignTransactionResult{data, signed}, nil
+	}
+	if rawTx.Type() == types.LegacyTxType {
+		SenderTx := types.LegacyTx{
+			To:       rawTx.To(),
+			Nonce:    rawTx.Nonce(),
+			Gas:      rawTx.Gas(),
+			GasPrice: rawTx.GasPrice(),
+			Value:    rawTx.Value(),
+			Data:     rawTx.Data(),
+			V:        V,
+			R:        R,
+			S:        S,
+		}
+		log.Info("SignRawFeeDelegateTransaction", "SenderTx", SenderTx)
+		FeeDelegateLegacyTx := &types.FeeDelegateLegacyTx{
+			MaxFeeLimit: (*big.Int)(args.MaxFeeLimit),
+			FeePayer:    args.FeePayer,
+		}
+
+		FeeDelegateLegacyTx.SetSenderTx(SenderTx)
+		tx := types.NewTx(FeeDelegateLegacyTx)
+
+		log.Info("SignRawFeeDelegateTransaction", "FeeDelegateLegacyTx=", FeeDelegateLegacyTx)
+
+		signed, err := s.sign(*args.FeePayer, tx)
+		if err != nil {
+			return nil, err
+		}
+		data, err := signed.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+
+		return &SignTransactionResult{data, signed}, nil
+	}
+	return nil, fmt.Errorf("senderTx type error")
+}
+
+// SignFeeDelegateTransaction will sign the given feeDelegate transaction with the from account.
+// The node needs to have the private key of the account corresponding with
+// the given from address and it needs to be unlocked.
+func (s *PublicTransactionPoolAPI) SignFeeDelegateTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
+	if args.FeePayer == nil {
+		return nil, fmt.Errorf("missing FeePayer or IsContract")
+	}
+
+	if err := args.setDefaults(ctx, s.b); err != nil {
+		return nil, err
+	}
+
+	tx := args.toTransaction()
+	log.Info("SignFeeDelegateTransaction:", "tx=", tx)
+
+	senderFrom, _ := s.signer.Sender(tx)
+	log.Info("SignFeeDelegateTransaction.toTransaction", "senderFrom", senderFrom)
+	log.Info("SignFeeDelegateTransaction:", "args.FeePayer=", *args.FeePayer)
+	log.Info("SignFeeDelegateTransaction:", "tx.Type()=", tx.Type())
+
+	signed, err := s.sign(*args.FeePayer, tx)
+	if err != nil {
+		return nil, err
+	}
+	data, err := signed.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	log.Info("SignFeeDelegateTransaction:", "signed=", signed)
+	log.Info("SignFeeDelegateTransaction:", "signed.UnmarshalBinary=", signed.UnmarshalBinary(data))
+	return &SignTransactionResult{data, signed}, nil
 }
