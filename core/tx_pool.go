@@ -690,7 +690,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		//	return ErrMaxFeeLimit
 		//}
 		// Make sure the transaction is signed properly.
-		feepayer, err := types.FeePayerSender(types.NewfeePayerSigner(pool.chainconfig.ChainID), tx)
+		feepayer, err := types.FeePayer(types.NewFeeDelegateSigner(pool.chainconfig.ChainID), tx)
 		log.Info("validateTx", "tx.FeePayer()", tx.FeePayer(), "feepayer", feepayer)
 		if *tx.FeePayer() != feepayer || err != nil {
 			return ErrInvalidFeePayer

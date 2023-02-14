@@ -175,7 +175,7 @@ func GetSender(signer Signer, tx *Transaction) *common.Address {
 }
 
 // fee delegate
-func FeePayerSender(signer Signer, tx *Transaction) (common.Address, error) {
+func FeePayer(signer Signer, tx *Transaction) (common.Address, error) {
 	if sc := tx.feepayer.Load(); sc != nil {
 		sigCache := sc.(sigCache)
 		// If the signer used to derive from in a previous
@@ -244,13 +244,13 @@ type Signer interface {
 }
 
 // fee delegate
-type feePayerSigner struct{ londonSigner }
+type feeDelegateSigner struct{ londonSigner }
 
-func NewfeePayerSigner(chainId *big.Int) Signer {
-	return feePayerSigner{londonSigner{eip2930Signer{NewEIP155Signer(chainId)}}}
+func NewFeeDelegateSigner(chainId *big.Int) Signer {
+	return feeDelegateSigner{londonSigner{eip2930Signer{NewEIP155Signer(chainId)}}}
 }
 
-func (s feePayerSigner) Sender(tx *Transaction) (common.Address, error) {
+func (s feeDelegateSigner) Sender(tx *Transaction) (common.Address, error) {
 	if tx.Type() != FeeDelegateLegacyTxType && tx.Type() != FeeDelegateDynamicFeeTxType {
 		return s.londonSigner.Sender(tx)
 	}
@@ -264,12 +264,12 @@ func (s feePayerSigner) Sender(tx *Transaction) (common.Address, error) {
 	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
 
-func (s feePayerSigner) Equal(s2 Signer) bool {
-	x, ok := s2.(feePayerSigner)
+func (s feeDelegateSigner) Equal(s2 Signer) bool {
+	x, ok := s2.(feeDelegateSigner)
 	return ok && x.chainId.Cmp(s.chainId) == 0
 }
 
-func (s feePayerSigner) SignatureValuesFeeDelegateDynamicFeeTx(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
+func (s feeDelegateSigner) SignatureValuesFeeDelegateDynamicFeeTx(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
 	txdata, ok := tx.inner.(*FeeDelegateDynamicFeeTx)
 
 	if !ok {
@@ -284,7 +284,7 @@ func (s feePayerSigner) SignatureValuesFeeDelegateDynamicFeeTx(tx *Transaction, 
 	V = big.NewInt(int64(sig[64]))
 	return R, S, V, nil
 }
-func (s feePayerSigner) SignatureValuesFeeDelegateLegacyTx(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
+func (s feeDelegateSigner) SignatureValuesFeeDelegateLegacyTx(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
 	txdata, ok := tx.inner.(*FeeDelegateLegacyTx)
 
 	if !ok {
@@ -299,7 +299,7 @@ func (s feePayerSigner) SignatureValuesFeeDelegateLegacyTx(tx *Transaction, sig 
 	V = big.NewInt(int64(sig[64]))
 	return R, S, V, nil
 }
-func (s feePayerSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
+func (s feeDelegateSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
 	if tx.Type() == FeeDelegateDynamicFeeTxType {
 		return s.SignatureValuesFeeDelegateDynamicFeeTx(tx, sig)
 	}
@@ -311,7 +311,7 @@ func (s feePayerSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *b
 
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
-func (s feePayerSigner) Hash(tx *Transaction) common.Hash {
+func (s feeDelegateSigner) Hash(tx *Transaction) common.Hash {
 	if tx.Type() != FeeDelegateLegacyTxType && tx.Type() != FeeDelegateDynamicFeeTxType {
 		return s.londonSigner.Hash(tx)
 	}

@@ -1324,11 +1324,11 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
 	switch tx.Type() {
-	case types.AccessListTxType:
+	case types.AccessListTxType, types.FeeDelegateLegacyTxType: // fee delegate
 		al := tx.AccessList()
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
-	case types.DynamicFeeTxType:
+	case types.DynamicFeeTxType, types.FeeDelegateDynamicFeeTxType: // fee delegate
 		al := tx.AccessList()
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
@@ -1718,8 +1718,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 	}
 	// fee delegate
 	if tx.Type() == types.FeeDelegateDynamicFeeTxType || tx.Type() == types.FeeDelegateLegacyTxType {
-		feepayersigner := types.NewfeePayerSigner(b.ChainConfig().ChainID)
-		feepayer, err := types.FeePayerSender(feepayersigner, tx)
+		feepayer, err := types.FeePayer(types.NewFeeDelegateSigner(b.ChainConfig().ChainID), tx)
 		if err != nil {
 			log.Info("SubmitTransaction", "types.FeePayerSender err=", err)
 			return common.Hash{}, err

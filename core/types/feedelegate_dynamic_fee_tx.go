@@ -35,8 +35,8 @@ type FeeDelegateDynamicFeeTx struct {
 func (tx *FeeDelegateDynamicFeeTx) SetSenderTx(senderTx DynamicFeeTx) {
 	tx.SenderTx.ChainID = senderTx.ChainID
 	tx.SenderTx.Nonce = senderTx.Nonce
-	tx.SenderTx.GasTipCap = senderTx.GasFeeCap
 	tx.SenderTx.GasFeeCap = senderTx.GasFeeCap
+	tx.SenderTx.GasTipCap = senderTx.GasTipCap
 	tx.SenderTx.Gas = senderTx.Gas
 	tx.SenderTx.To = senderTx.To
 	tx.SenderTx.Value = senderTx.Value

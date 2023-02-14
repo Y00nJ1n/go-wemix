@@ -702,7 +702,7 @@ func (w *Wallet) SignTx(account accounts.Account, tx *types.Transaction, chainID
 
 	// fee delegate
 	if tx.Type() == types.FeeDelegateDynamicFeeTxType || tx.Type() == types.FeeDelegateLegacyTxType {
-		signer := types.NewfeePayerSigner(chainID)
+		signer := types.NewFeeDelegateSigner(chainID)
 		hash := signer.Hash(tx)
 		sig, err := w.signHash(account, hash[:])
 		if err != nil {

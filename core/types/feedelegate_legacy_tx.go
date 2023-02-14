@@ -52,10 +52,6 @@ func (tx *FeeDelegateLegacyTx) SetSenderTx(senderTx LegacyTx) {
 	tx.SenderTx.S = s
 }
 
-//func (tx *FeeDelegateLegacyTx) SetSenderTxhash(senderTx TxData) {
-//	//tx.SenderTxHash = senderTx.getSenderTxHash()
-//}
-
 // copy creates a deep copy of the transaction data and initializes all fields.
 func (tx *FeeDelegateLegacyTx) copy() TxData {
 	cpy := &FeeDelegateLegacyTx{
@@ -136,21 +132,3 @@ func (tx *FeeDelegateLegacyTx) rawSignatureValues() (v, r, s *big.Int) {
 func (tx *FeeDelegateLegacyTx) setSignatureValues(chainID, v, r, s *big.Int) {
 	tx.FV, tx.FR, tx.FS = v, r, s
 }
-
-//
-//
-//func (tx *FeeDelegateLegacyTx) rawSenderTxSignatureValues() (v, r, s *big.Int) {
-//	return tx.SenderTx.rawSignatureValues()
-//}
-//
-//func (tx *FeeDelegateLegacyTx) SetSenderTxSignatureValues(chainID, v, r, s *big.Int) {
-//	tx.SenderTx.setSignatureValues(chainID, v, r, s)
-//}
-//
-//func (tx *FeeDelegateLegacyTx) getFeePayer() *common.Address {
-//	return tx.FeePayer
-//}
-//
-//func (tx *FeeDelegateLegacyTx) senderTxcopy() TxData {
-//	return tx.SenderTx.copy()
-//}
