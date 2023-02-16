@@ -312,28 +312,49 @@ func (s feeDelegateSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s feeDelegateSigner) Hash(tx *Transaction) common.Hash {
-	if tx.Type() != FeeDelegateLegacyTxType && tx.Type() != FeeDelegateDynamicFeeTxType {
-		return s.londonSigner.Hash(tx)
-	}
 	senderV, senderR, senderS := tx.RawSignatureValues()
-	return prefixedRlpHash(
-		tx.Type(),
-		[]interface{}{
-			s.chainId,
-			tx.Nonce(),
-			tx.GasTipCap(),
-			tx.GasFeeCap(),
-			tx.Gas(),
-			tx.To(),
-			tx.Value(),
-			tx.Data(),
-			tx.AccessList(),
-			senderV,
-			senderR,
-			senderS,
-			tx.MaxFeeLimit(),
-			tx.FeePayer(),
-		})
+	if tx.Type() == FeeDelegateLegacyTxType {
+		return prefixedRlpHash(
+			tx.Type(),
+			[]interface{}{
+				[]interface{}{
+					tx.Nonce(),
+					tx.GasPrice(),
+					tx.Gas(),
+					tx.To(),
+					tx.Value(),
+					tx.Data(),
+					senderV,
+					senderR,
+					senderS,
+				},
+				tx.MaxFeeLimit(),
+				tx.FeePayer(),
+			})
+	}
+	if tx.Type() == FeeDelegateDynamicFeeTxType {
+		return prefixedRlpHash(
+			tx.Type(),
+			[]interface{}{
+				[]interface{}{
+					s.chainId,
+					tx.Nonce(),
+					tx.GasTipCap(),
+					tx.GasFeeCap(),
+					tx.Gas(),
+					tx.To(),
+					tx.Value(),
+					tx.Data(),
+					tx.AccessList(),
+					senderV,
+					senderR,
+					senderS,
+				},
+				tx.MaxFeeLimit(),
+				tx.FeePayer(),
+			})
+	}
+	return s.londonSigner.Hash(tx)
 }
 
 type londonSigner struct{ eip2930Signer }
