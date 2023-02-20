@@ -94,7 +94,6 @@ type TxData interface {
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
 	// fee delegate
-	maxfeelimit() *big.Int
 	feePayer() *common.Address
 	rawFeePayerSignatureValues() (v, r, s *big.Int)
 }
@@ -301,7 +300,6 @@ func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value
 func (tx *Transaction) Nonce() uint64 { return tx.inner.nonce() }
 
 // fee delegate
-func (tx *Transaction) MaxFeeLimit() *big.Int     { return tx.inner.maxfeelimit() }
 func (tx *Transaction) FeePayer() *common.Address { return tx.inner.feePayer() }
 func (tx *Transaction) RawFeePayerSignatureValues() (v, r, s *big.Int) {
 	return tx.inner.rawFeePayerSignatureValues()
@@ -651,8 +649,7 @@ type Message struct {
 	accessList AccessList
 	isFake     bool
 	// fee delegate
-	maxfeelimit *big.Int
-	feepayer    *common.Address
+	feepayer *common.Address
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isFake bool) Message {
@@ -686,9 +683,6 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 		isFake:     false,
 	}
 	// fee delegate
-	if tx.MaxFeeLimit() != nil {
-		msg.maxfeelimit = new(big.Int).Set(tx.MaxFeeLimit())
-	}
 	if tx.FeePayer() != nil {
 		msg.feepayer = tx.FeePayer()
 	}
@@ -714,7 +708,6 @@ func (m Message) AccessList() AccessList { return m.accessList }
 func (m Message) IsFake() bool           { return m.isFake }
 
 // fee delegate
-func (m Message) MaxFeeLimit() *big.Int     { return m.maxfeelimit }
 func (m Message) FeePayer() *common.Address { return m.feepayer }
 
 // copyAddressPtr copies an address.

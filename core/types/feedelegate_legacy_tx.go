@@ -25,9 +25,8 @@ import (
 // FeeDelegateLegacyTx is a transaction that pays fees instead.
 
 type FeeDelegateLegacyTx struct {
-	SenderTx    LegacyTx
-	MaxFeeLimit *big.Int
-	FeePayer    *common.Address `rlp:"nil"`
+	SenderTx LegacyTx
+	FeePayer *common.Address `rlp:"nil"`
 
 	// Signature values
 	FV *big.Int `json:"fv" gencodec:"required"`
@@ -55,9 +54,8 @@ func (tx *FeeDelegateLegacyTx) SetSenderTx(senderTx LegacyTx) {
 // copy creates a deep copy of the transaction data and initializes all fields.
 func (tx *FeeDelegateLegacyTx) copy() TxData {
 	cpy := &FeeDelegateLegacyTx{
-		SenderTx:    tx.copyLegacyTx(),
-		MaxFeeLimit: tx.MaxFeeLimit,
-		FeePayer:    copyAddressPtr(tx.FeePayer),
+		SenderTx: tx.copyLegacyTx(),
+		FeePayer: copyAddressPtr(tx.FeePayer),
 		// fee payer Signature values
 		FV: new(big.Int),
 		FR: new(big.Int),
@@ -119,7 +117,6 @@ func (tx *FeeDelegateLegacyTx) gasPrice() *big.Int        { return tx.SenderTx.g
 func (tx *FeeDelegateLegacyTx) value() *big.Int           { return tx.SenderTx.value() }
 func (tx *FeeDelegateLegacyTx) nonce() uint64             { return tx.SenderTx.nonce() }
 func (tx *FeeDelegateLegacyTx) to() *common.Address       { return tx.SenderTx.to() }
-func (tx *FeeDelegateLegacyTx) maxfeelimit() *big.Int     { return tx.MaxFeeLimit }
 func (tx *FeeDelegateLegacyTx) feePayer() *common.Address { return tx.FeePayer }
 func (tx *FeeDelegateLegacyTx) rawFeePayerSignatureValues() (v, r, s *big.Int) {
 	return tx.FV, tx.FR, tx.FS

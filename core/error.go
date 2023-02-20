@@ -104,8 +104,4 @@ var (
 	// ErrFeePayerInsufficientFunds is returned if the total cost of executing a transaction
 	// is higher than the balance of the feepayer's account.
 	ErrFeePayerInsufficientFunds = errors.New("feepayer insufficient funds for gas * price + value")
-
-	// ErrMaxFeeLimit is returned if the transaction fee
-	// exceeds the MaxFeeLimit of the FeePayer
-	ErrMaxFeeLimit = errors.New("exceeds the maxfeelimit of the feepayer")
 )

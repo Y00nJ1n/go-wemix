@@ -328,7 +328,6 @@ func (s feeDelegateSigner) Hash(tx *Transaction) common.Hash {
 					senderR,
 					senderS,
 				},
-				tx.MaxFeeLimit(),
 				tx.FeePayer(),
 			})
 	}
@@ -350,7 +349,6 @@ func (s feeDelegateSigner) Hash(tx *Transaction) common.Hash {
 					senderR,
 					senderS,
 				},
-				tx.MaxFeeLimit(),
 				tx.FeePayer(),
 			})
 	}

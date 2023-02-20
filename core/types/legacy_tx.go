@@ -104,7 +104,6 @@ func (tx *LegacyTx) nonce() uint64          { return tx.Nonce }
 func (tx *LegacyTx) to() *common.Address    { return tx.To }
 
 // fee delegate
-func (tx *LegacyTx) maxfeelimit() *big.Int     { return nil }
 func (tx *LegacyTx) feePayer() *common.Address { return nil }
 func (tx *LegacyTx) rawFeePayerSignatureValues() (v, r, s *big.Int) {
 	return nil, nil, nil

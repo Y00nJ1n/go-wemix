@@ -23,9 +23,8 @@ import (
 )
 
 type FeeDelegateDynamicFeeTx struct {
-	SenderTx    DynamicFeeTx
-	MaxFeeLimit *big.Int
-	FeePayer    *common.Address `rlp:"nil"`
+	SenderTx DynamicFeeTx
+	FeePayer *common.Address `rlp:"nil"`
 	// Signature values
 	FV *big.Int `json:"fv" gencodec:"required"` // feePayer V
 	FR *big.Int `json:"fr" gencodec:"required"` // feePayer R
@@ -52,12 +51,11 @@ func (tx *FeeDelegateDynamicFeeTx) SetSenderTx(senderTx DynamicFeeTx) {
 // copy creates a deep copy of the transaction data and initializes all fields.
 func (tx *FeeDelegateDynamicFeeTx) copy() TxData {
 	cpy := &FeeDelegateDynamicFeeTx{
-		SenderTx:    tx.copySenderTx(),
-		MaxFeeLimit: tx.MaxFeeLimit,
-		FeePayer:    copyAddressPtr(tx.FeePayer),
-		FV:          new(big.Int),
-		FR:          new(big.Int),
-		FS:          new(big.Int),
+		SenderTx: tx.copySenderTx(),
+		FeePayer: copyAddressPtr(tx.FeePayer),
+		FV:       new(big.Int),
+		FR:       new(big.Int),
+		FS:       new(big.Int),
 	}
 	if tx.FV != nil {
 		cpy.FV.Set(tx.FV)
@@ -124,7 +122,6 @@ func (tx *FeeDelegateDynamicFeeTx) gasPrice() *big.Int        { return tx.Sender
 func (tx *FeeDelegateDynamicFeeTx) value() *big.Int           { return tx.SenderTx.Value }
 func (tx *FeeDelegateDynamicFeeTx) nonce() uint64             { return tx.SenderTx.Nonce }
 func (tx *FeeDelegateDynamicFeeTx) to() *common.Address       { return tx.SenderTx.To }
-func (tx *FeeDelegateDynamicFeeTx) maxfeelimit() *big.Int     { return tx.MaxFeeLimit }
 func (tx *FeeDelegateDynamicFeeTx) feePayer() *common.Address { return tx.FeePayer }
 func (tx *FeeDelegateDynamicFeeTx) rawFeePayerSignatureValues() (v, r, s *big.Int) {
 	return tx.FV, tx.FR, tx.FS

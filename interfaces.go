@@ -144,8 +144,7 @@ type CallMsg struct {
 	AccessList types.AccessList // EIP-2930 access list.
 
 	// fee delegate
-	MaxFeeLimit *big.Int
-	FeePayer    *common.Address
+	FeePayer *common.Address
 }
 
 // A ContractCaller provides contract calls, essentially transactions that are executed by

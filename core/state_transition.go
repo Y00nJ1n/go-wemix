@@ -82,7 +82,6 @@ type Message interface {
 	Data() []byte
 	AccessList() types.AccessList
 	// fee delegate
-	MaxFeeLimit() *big.Int
 	FeePayer() *common.Address
 }
 
@@ -338,20 +337,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	st.gas -= gas
 
-	// fee delegate
-	// Check feepayer MaxFeeLimit before execution contract
-	//if st.msg.FeePayer() != nil {
-	//	maxfeelimt := st.msg.MaxFeeLimit()
-	//	if maxfeelimt == nil {
-	//		return nil, fmt.Errorf("error msg.maxfeelimit is nil")
-	//	}
-	//	calculatemaxfee := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
-	//	log.Info("check before maxfeelimt", "maxfeelimt", maxfeelimt, "bigFee", calculatemaxfee)
-	//	if maxfeelimt.Cmp(calculatemaxfee) < 0 {
-	//		return nil, fmt.Errorf("%w: maxfee: %d, maxfeelimt: %d", ErrMaxFeeLimit, calculatemaxfee, maxfeelimt)
-	//	}
-	//}
-
 	// Check clause 6
 	if msg.Value().Sign() > 0 && !st.evm.Context.CanTransfer(st.state, msg.From(), msg.Value()) {
 		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From().Hex())
@@ -385,19 +370,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 	}
 	bigFee := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip)
-
-	// fee delegate
-	// Check feepayer MaxFeeLimit after execution contract
-	if st.msg.FeePayer() != nil {
-		maxfeelimt := st.msg.MaxFeeLimit()
-		log.Info("check after maxfeelimt", "maxfeelimt", maxfeelimt, "bigFee", bigFee)
-		if maxfeelimt == nil {
-			return nil, fmt.Errorf("error msg.maxfeelimit is nil")
-		}
-		if maxfeelimt.Cmp(bigFee) < 0 {
-			return nil, fmt.Errorf("%w: bigFee: %d, maxfeelimt: %d", ErrMaxFeeLimit, bigFee, maxfeelimt)
-		}
-	}
 
 	// In wemix, block reward and fees are combined and distributed as
 	// agreed in the governance contract

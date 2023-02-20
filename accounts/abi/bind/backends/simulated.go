@@ -814,7 +814,6 @@ func (m callMsg) Data() []byte                 { return m.CallMsg.Data }
 func (m callMsg) AccessList() types.AccessList { return m.CallMsg.AccessList }
 
 // fee delegate
-func (m callMsg) MaxFeeLimit() *big.Int     { return m.CallMsg.MaxFeeLimit }
 func (m callMsg) FeePayer() *common.Address { return m.CallMsg.FeePayer }
 
 // filterBackend implements filters.Backend to support filtering for logs without

@@ -49,11 +49,10 @@ type txJSON struct {
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
 	// fee delegate
-	MaxFeeLimit *hexutil.Big    `json:"maxFeeLimit,omitempty"`
-	FeePayer    *common.Address `json:"feePayer,omitempty"`
-	FV          *hexutil.Big    `json:"fv,omitempty"`
-	FR          *hexutil.Big    `json:"fr,omitempty"`
-	FS          *hexutil.Big    `json:"fs,omitempty"`
+	FeePayer *common.Address `json:"feePayer,omitempty"`
+	FV       *hexutil.Big    `json:"fv,omitempty"`
+	FR       *hexutil.Big    `json:"fr,omitempty"`
+	FS       *hexutil.Big    `json:"fs,omitempty"`
 }
 
 // MarshalJSON marshals as JSON with a hash.
@@ -120,7 +119,6 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.R = (*hexutil.Big)(r)
 		enc.S = (*hexutil.Big)(s)
 
-		enc.MaxFeeLimit = (*hexutil.Big)(tx.MaxFeeLimit)
 		enc.FeePayer = tx.FeePayer
 		enc.FV = (*hexutil.Big)(tx.FV)
 		enc.FR = (*hexutil.Big)(tx.FR)
@@ -140,7 +138,6 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.R = (*hexutil.Big)(r)
 		enc.S = (*hexutil.Big)(s)
 
-		enc.MaxFeeLimit = (*hexutil.Big)(tx.MaxFeeLimit)
 		enc.FeePayer = tx.FeePayer
 		enc.FV = (*hexutil.Big)(tx.FV)
 		enc.FR = (*hexutil.Big)(tx.FR)

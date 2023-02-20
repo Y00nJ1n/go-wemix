@@ -1291,11 +1291,10 @@ type RPCTransaction struct {
 	R                *hexutil.Big      `json:"r"`
 	S                *hexutil.Big      `json:"s"`
 	// fee delegate
-	MaxFeeLimit *hexutil.Big    `json:"maxfeelimit,omitempty"`
-	FeePayer    *common.Address `json:"feepayer,omitempty"`
-	FV          *hexutil.Big    `json:"fv,omitempty"`
-	FR          *hexutil.Big    `json:"fr,omitempty"`
-	FS          *hexutil.Big    `json:"fs,omitempty"`
+	FeePayer *common.Address `json:"feepayer,omitempty"`
+	FV       *hexutil.Big    `json:"fv,omitempty"`
+	FR       *hexutil.Big    `json:"fr,omitempty"`
+	FS       *hexutil.Big    `json:"fs,omitempty"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
@@ -1345,8 +1344,6 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	}
 	// fee delegate
 	if tx.Type() == types.FeeDelegateDynamicFeeTxType || tx.Type() == types.FeeDelegateLegacyTxType {
-		result.MaxFeeLimit = (*hexutil.Big)(tx.MaxFeeLimit())
-		result.MaxFeeLimit = (*hexutil.Big)(tx.MaxFeeLimit())
 		result.FeePayer = tx.FeePayer()
 		fv, fr, fs := tx.RawFeePayerSignatureValues()
 		result.FV = (*hexutil.Big)(fv)
@@ -2150,13 +2147,7 @@ func (s *PrivateAccountAPI) SignRawFeeDelegateTransaction(ctx context.Context, a
 	if err != nil {
 		return nil, err
 	}
-	// Set some sanity defaults and terminate on failure
-	//if err := args.setDefaults(ctx, s.b); err != nil {
-	//	return nil, err
-	//}
-	if args.MaxFeeLimit == nil {
-		return nil, fmt.Errorf("missing MaxFeeLimit")
-	}
+
 	rawTx := new(types.Transaction)
 	if err := rawTx.UnmarshalBinary(input); err != nil {
 		return nil, err
@@ -2180,8 +2171,7 @@ func (s *PrivateAccountAPI) SignRawFeeDelegateTransaction(ctx context.Context, a
 		}
 		log.Info("SignRawFeeDelegateTransaction", "SenderTx", SenderTx)
 		FeeDelegateDynamicFeeTx := &types.FeeDelegateDynamicFeeTx{
-			MaxFeeLimit: (*big.Int)(args.MaxFeeLimit),
-			FeePayer:    args.FeePayer,
+			FeePayer: args.FeePayer,
 		}
 
 		FeeDelegateDynamicFeeTx.SetSenderTx(SenderTx)
@@ -2215,8 +2205,7 @@ func (s *PrivateAccountAPI) SignRawFeeDelegateTransaction(ctx context.Context, a
 		}
 		log.Info("SignRawFeeDelegateTransaction", "SenderTx", SenderTx)
 		FeeDelegateLegacyTx := &types.FeeDelegateLegacyTx{
-			MaxFeeLimit: (*big.Int)(args.MaxFeeLimit),
-			FeePayer:    args.FeePayer,
+			FeePayer: args.FeePayer,
 		}
 
 		FeeDelegateLegacyTx.SetSenderTx(SenderTx)
@@ -2249,13 +2238,6 @@ func (s *PublicTransactionPoolAPI) SignRawFeeDelegateTransaction(ctx context.Con
 	if args.FeePayer == nil {
 		return nil, fmt.Errorf("missing FeePayer")
 	}
-	if args.MaxFeeLimit == nil {
-		return nil, fmt.Errorf("missing MaxFeeLimit")
-	}
-
-	//if err := args.setDefaults(ctx, s.b); err != nil {
-	//	return nil, err
-	//}
 
 	rawTx := new(types.Transaction)
 	if err := rawTx.UnmarshalBinary(input); err != nil {
@@ -2280,8 +2262,7 @@ func (s *PublicTransactionPoolAPI) SignRawFeeDelegateTransaction(ctx context.Con
 		}
 		log.Info("SignRawFeeDelegateTransaction", "SenderTx", SenderTx)
 		FeeDelegateDynamicFeeTx := &types.FeeDelegateDynamicFeeTx{
-			MaxFeeLimit: (*big.Int)(args.MaxFeeLimit),
-			FeePayer:    args.FeePayer,
+			FeePayer: args.FeePayer,
 		}
 
 		FeeDelegateDynamicFeeTx.SetSenderTx(SenderTx)
@@ -2314,8 +2295,7 @@ func (s *PublicTransactionPoolAPI) SignRawFeeDelegateTransaction(ctx context.Con
 		}
 		log.Info("SignRawFeeDelegateTransaction", "SenderTx", SenderTx)
 		FeeDelegateLegacyTx := &types.FeeDelegateLegacyTx{
-			MaxFeeLimit: (*big.Int)(args.MaxFeeLimit),
-			FeePayer:    args.FeePayer,
+			FeePayer: args.FeePayer,
 		}
 
 		FeeDelegateLegacyTx.SetSenderTx(SenderTx)

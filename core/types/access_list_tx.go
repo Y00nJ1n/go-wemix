@@ -107,7 +107,6 @@ func (tx *AccessListTx) nonce() uint64          { return tx.Nonce }
 func (tx *AccessListTx) to() *common.Address    { return tx.To }
 
 // fee delegate
-func (tx *AccessListTx) maxfeelimit() *big.Int     { return nil }
 func (tx *AccessListTx) feePayer() *common.Address { return nil }
 func (tx *AccessListTx) rawFeePayerSignatureValues() (v, r, s *big.Int) {
 	return nil, nil, nil

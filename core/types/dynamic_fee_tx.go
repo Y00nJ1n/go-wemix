@@ -95,7 +95,6 @@ func (tx *DynamicFeeTx) nonce() uint64          { return tx.Nonce }
 func (tx *DynamicFeeTx) to() *common.Address    { return tx.To }
 
 // fee delegate
-func (tx *DynamicFeeTx) maxfeelimit() *big.Int     { return nil }
 func (tx *DynamicFeeTx) feePayer() *common.Address { return nil }
 func (tx *DynamicFeeTx) rawFeePayerSignatureValues() (v, r, s *big.Int) {
 	return nil, nil, nil

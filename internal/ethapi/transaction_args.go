@@ -54,8 +54,7 @@ type TransactionArgs struct {
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
 
 	// fee delegate
-	MaxFeeLimit *hexutil.Big    `json:"maxFeeLimit"` //feePayer delegated fee limit
-	FeePayer    *common.Address `json:"feePayer"`
+	FeePayer *common.Address `json:"feePayer"`
 	// Signature values
 	V *hexutil.Big `json:"v"`
 	R *hexutil.Big `json:"r"`
@@ -273,7 +272,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			AccessList: al,
 		}
 		// fee delegate
-		if args.FeePayer != nil && args.MaxFeeLimit != nil && args.V != nil && args.R != nil && args.S != nil {
+		if args.FeePayer != nil && args.V != nil && args.R != nil && args.S != nil {
 			log.Info("tx_arg", "FeeDelegateDynamicFeeTx")
 			SenderTx := types.DynamicFeeTx{
 				To:         args.To,
@@ -291,8 +290,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			}
 			log.Info("tx_arg", "FeeDelegateDynamicFeeTx SenderTx=", SenderTx)
 			FeeDelegateDynamicFeeTx := &types.FeeDelegateDynamicFeeTx{
-				MaxFeeLimit: (*big.Int)(args.MaxFeeLimit),
-				FeePayer:    args.FeePayer,
+				FeePayer: args.FeePayer,
 			}
 
 			FeeDelegateDynamicFeeTx.SetSenderTx(SenderTx)
@@ -334,8 +332,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			}
 			log.Info("tx_arg", "FeeDelegateLegacyTx SenderTx=", SenderTx)
 			FeeDelegateLegacyTx := &types.FeeDelegateLegacyTx{
-				MaxFeeLimit: (*big.Int)(args.MaxFeeLimit),
-				FeePayer:    args.FeePayer,
+				FeePayer: args.FeePayer,
 			}
 
 			FeeDelegateLegacyTx.SetSenderTx(SenderTx)
