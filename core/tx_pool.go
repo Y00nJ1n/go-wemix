@@ -685,27 +685,20 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 
 	// fee delegate
 	if tx.Type() == types.FeeDelegateDynamicFeeTxType || tx.Type() == types.FeeDelegateLegacyTxType {
-		//log.Info("validateTx", "tx.MaxFeeLimit()", tx.MaxFeeLimit(), "tx.Cost()", tx.Cost())
-		//if tx.MaxFeeLimit().Cmp(tx.Cost()) < 0 {
-		//	return ErrMaxFeeLimit
-		//}
 		// Make sure the transaction is signed properly.
 		feepayer, err := types.FeePayer(types.NewFeeDelegateSigner(pool.chainconfig.ChainID), tx)
-		log.Info("validateTx", "tx.FeePayer()", tx.FeePayer(), "feepayer", feepayer)
 		if *tx.FeePayer() != feepayer || err != nil {
 			return ErrInvalidFeePayer
 		}
-		if pool.currentState.GetBalance(feepayer).Cmp(tx.Cost()) < 0 {
-			log.Info("validateTx", "pool.currentState.GetBalance(feepayer)", pool.currentState.GetBalance(feepayer), "feepayer", feepayer)
+		costFeePayer := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
+		if pool.currentState.GetBalance(feepayer).Cmp(costFeePayer) < 0 {
 			return ErrFeePayerInsufficientFunds
 		}
 		if pool.currentState.GetBalance(from).Cmp(tx.Value()) < 0 {
-			log.Info("validateTx", "pool.currentState.GetBalance(from)", pool.currentState.GetBalance(from), "from", from)
-			return ErrInsufficientFunds
+			return ErrFromInsufficientFunds
 		}
 	} else {
 		if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
-			log.Info("validateTx", "pool.currentState.GetBalance(from)", pool.currentState.GetBalance(from), "from", from)
 			return ErrInsufficientFunds
 		}
 	}
@@ -1116,6 +1109,11 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 			delete(pool.beats, addr)
 		}
 	}
+}
+
+// fee delegate
+func (pool *TxPool) RemoveFeeDelegateTx(hash common.Hash, outofbound bool) {
+	pool.removeTx(hash, outofbound)
 }
 
 // requestReset requests a pool reset to the new head block.

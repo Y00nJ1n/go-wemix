@@ -207,9 +207,13 @@ func (st *StateTransition) buyGas() error {
 	}
 	// fee delegate
 	if st.msg.FeePayer() != nil {
+		if st.gasFeeCap != nil {
+			mgval = new(big.Int).SetUint64(st.msg.Gas())
+			mgval = mgval.Mul(mgval, st.gasFeeCap)
+		}
 		feepayer := *st.msg.FeePayer()
 		if have, want := st.state.GetBalance(feepayer), mgval; have.Cmp(want) < 0 {
-			return fmt.Errorf("%w: feepayer address %v have %v want %v", ErrInsufficientFunds, feepayer.Hex(), have, want)
+			return ErrFeePayerInsufficientFunds
 		}
 		if have, want := st.state.GetBalance(st.msg.From()), st.value; have.Cmp(want) < 0 {
 			return fmt.Errorf("%w: sender address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)

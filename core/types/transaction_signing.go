@@ -141,7 +141,6 @@ func Sender(signer Signer, tx *Transaction) (common.Address, error) {
 	}
 
 	addr, err := signer.Sender(tx)
-	log.Info("Sender", "Sender addr", addr, "err", err)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -371,7 +370,7 @@ func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
 		return s.eip2930Signer.Sender(tx)
 	}
 	V, R, S := tx.RawSignatureValues()
-	log.Info("londonSigner", "tx.Type()", tx.Type(), "FeeDelegateDynamicFeeTxType", FeeDelegateDynamicFeeTxType, "v", V, "r", R, "S", S)
+
 	// DynamicFee txs are defined to use 0 and 1 as their recovery
 	// id, add 27 to become equivalent to unprotected Homestead signatures.
 	V = new(big.Int).Add(V, big.NewInt(27))
@@ -446,7 +445,7 @@ func (s eip2930Signer) Equal(s2 Signer) bool {
 
 func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 	V, R, S := tx.RawSignatureValues()
-	log.Info("eip2930Signer", "tx.Type()", tx.Type(), "v", V, "r", R, "S", S)
+
 	switch tx.Type() {
 	case LegacyTxType, FeeDelegateLegacyTxType: // fee delegate
 		if !tx.Protected() {

@@ -313,6 +313,11 @@ func (tx *Transaction) To() *common.Address {
 
 // Cost returns gas * gasPrice + value.
 func (tx *Transaction) Cost() *big.Int {
+	// fee delegate
+	if tx.Type() == FeeDelegateDynamicFeeTxType || tx.Type() == FeeDelegateLegacyTxType {
+		total := tx.Value()
+		return total
+	}
 	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
 	total.Add(total, tx.Value())
 	return total

@@ -1291,7 +1291,7 @@ type RPCTransaction struct {
 	R                *hexutil.Big      `json:"r"`
 	S                *hexutil.Big      `json:"s"`
 	// fee delegate
-	FeePayer *common.Address `json:"feepayer,omitempty"`
+	FeePayer *common.Address `json:"feePayer,omitempty"`
 	FV       *hexutil.Big    `json:"fv,omitempty"`
 	FR       *hexutil.Big    `json:"fr,omitempty"`
 	FS       *hexutil.Big    `json:"fs,omitempty"`
@@ -1703,25 +1703,21 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		return common.Hash{}, errors.New("only replay-protected (EIP-155) transactions allowed over RPC")
 	}
 	if err := b.SendTx(ctx, tx); err != nil {
-		log.Info("SubmitTransaction", "SendTx err=", err)
 		return common.Hash{}, err
 	}
 	// Print a log with full tx details for manual investigations and interventions
 	signer := types.MakeSigner(b.ChainConfig(), b.CurrentBlock().Number())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
-		log.Info("SubmitTransaction", "types.Sender err=", err)
 		return common.Hash{}, err
 	}
 	// fee delegate
 	if tx.Type() == types.FeeDelegateDynamicFeeTxType || tx.Type() == types.FeeDelegateLegacyTxType {
 		feepayer, err := types.FeePayer(types.NewFeeDelegateSigner(b.ChainConfig().ChainID), tx)
 		if err != nil {
-			log.Info("SubmitTransaction", "types.FeePayerSender err=", err)
 			return common.Hash{}, err
 		}
 		if feepayer != *tx.FeePayer() {
-			log.Info("SubmitTransaction", "types.FeePayerSender err=", err)
 			return common.Hash{}, errors.New("FeePayer Signature error")
 		}
 	}

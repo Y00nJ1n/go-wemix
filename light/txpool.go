@@ -380,8 +380,25 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
-	if b := currentState.GetBalance(from); b.Cmp(tx.Cost()) < 0 {
-		return core.ErrInsufficientFunds
+
+	// fee delegate
+	if tx.Type() == types.FeeDelegateDynamicFeeTxType || tx.Type() == types.FeeDelegateLegacyTxType {
+		// Make sure the transaction is signed properly.
+		feepayer, err := types.FeePayer(types.NewFeeDelegateSigner(pool.config.ChainID), tx)
+		if *tx.FeePayer() != feepayer || err != nil {
+			return core.ErrInvalidFeePayer
+		}
+		costFeePayer := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
+		if currentState.GetBalance(feepayer).Cmp(costFeePayer) < 0 {
+			return core.ErrFeePayerInsufficientFunds
+		}
+		if currentState.GetBalance(from).Cmp(tx.Value()) < 0 {
+			return core.ErrFromInsufficientFunds
+		}
+	} else {
+		if b := currentState.GetBalance(from); b.Cmp(tx.Cost()) < 0 {
+			return core.ErrInsufficientFunds
+		}
 	}
 
 	// Should supply enough intrinsic gas

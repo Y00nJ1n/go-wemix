@@ -98,10 +98,14 @@ var (
 	ErrSenderNoEOA = errors.New("sender not an eoa")
 
 	// fee delegate
-	// ErrInvalidFeePayer is returned if the transaction contains an invalid signature.
-	ErrInvalidFeePayer = errors.New("invalid feepayer")
+	// ErrInvalidFeePayer is returned if the transaction contains an invalid feepayer signature.
+	ErrInvalidFeePayer = errors.New("invalid feeDelegate feepayer")
 
-	// ErrFeePayerInsufficientFunds is returned if the total cost of executing a transaction
+	// ErrFeePayerInsufficientFunds is returned if the fee cost of executing a transaction
 	// is higher than the balance of the feepayer's account.
-	ErrFeePayerInsufficientFunds = errors.New("feepayer insufficient funds for gas * price + value")
+	ErrFeePayerInsufficientFunds = errors.New("feeDelegate feepayer insufficient funds for gas * price")
+
+	// ErrFeePayerInsufficientFunds is returned if the value cost of executing a transaction
+	// is higher than the balance of the from's account.
+	ErrFromInsufficientFunds = errors.New("feeDelegate from insufficient funds for value")
 )
