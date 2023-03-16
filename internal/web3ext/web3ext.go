@@ -698,16 +698,9 @@ web3._extend({
 		}),
         // fee delegate
 		new web3._extend.Method({
-			name: 'signFeeDelegateTransaction',
-			call: 'eth_signFeeDelegateTransaction',
-			params: 1,
-			//inputFormatter: [web3._extend.formatters.inputTransactionFormatter,web3._extend.formatters.inputAddressFormatter]
-		}),
-		new web3._extend.Method({
 			name: 'signRawFeeDelegateTransaction',
 			call: 'eth_signRawFeeDelegateTransaction',
 			params: 2,
-			//inputFormatter: [web3._extend.formatters.inputTransactionFormatter,web3._extend.formatters.inputAddressFormatter]
 		}),
 	],
 	properties: [
@@ -856,7 +849,6 @@ web3._extend({
 			name: 'signRawFeeDelegateTransaction',
 			call: 'personal_signRawFeeDelegateTransaction',
 			params: 3,
-			//inputFormatter: [web3._extend.formatters.inputTransactionFormatter,web3._extend.formatters.inputAddressFormatter]
 		}),
 	],
 	properties: [

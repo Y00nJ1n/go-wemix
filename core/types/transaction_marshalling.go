@@ -123,25 +123,6 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.FV = (*hexutil.Big)(tx.FV)
 		enc.FR = (*hexutil.Big)(tx.FR)
 		enc.FS = (*hexutil.Big)(tx.FS)
-	case *FeeDelegateLegacyTx:
-		nonce := tx.SenderTx.nonce()
-		enc.Nonce = (*hexutil.Uint64)(&nonce)
-		gas := tx.SenderTx.gas()
-		enc.Gas = (*hexutil.Uint64)(&gas)
-		enc.GasPrice = (*hexutil.Big)(tx.SenderTx.gasPrice())
-		enc.Value = (*hexutil.Big)(tx.SenderTx.value())
-		data := tx.SenderTx.data()
-		enc.Data = (*hexutil.Bytes)(&data)
-		enc.To = tx.SenderTx.to()
-		v, r, s := tx.SenderTx.rawSignatureValues()
-		enc.V = (*hexutil.Big)(v)
-		enc.R = (*hexutil.Big)(r)
-		enc.S = (*hexutil.Big)(s)
-
-		enc.FeePayer = tx.FeePayer
-		enc.FV = (*hexutil.Big)(tx.FV)
-		enc.FR = (*hexutil.Big)(tx.FR)
-		enc.FS = (*hexutil.Big)(tx.FS)
 	}
 	return json.Marshal(&enc)
 }
@@ -307,6 +288,85 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		withSignature := itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0
 		if withSignature {
 			if err := sanityCheckSignature(itx.V, itx.R, itx.S, false); err != nil {
+				return err
+			}
+		}
+	// fee delegate
+	case FeeDelegateDynamicFeeTxType:
+		var itx FeeDelegateDynamicFeeTx
+		inner = &itx
+		// Access list is optional for now.
+		if dec.AccessList != nil {
+			itx.SenderTx.AccessList = *dec.AccessList
+		}
+		if dec.ChainID == nil {
+			return errors.New("missing required field 'chainId' in transaction")
+		}
+		itx.SenderTx.ChainID = (*big.Int)(dec.ChainID)
+		if dec.To != nil {
+			itx.SenderTx.To = dec.To
+		}
+		if dec.Nonce == nil {
+			return errors.New("missing required field 'nonce' in transaction")
+		}
+		itx.SenderTx.Nonce = uint64(*dec.Nonce)
+		if dec.MaxPriorityFeePerGas == nil {
+			return errors.New("missing required field 'maxPriorityFeePerGas' for txdata")
+		}
+		itx.SenderTx.GasTipCap = (*big.Int)(dec.MaxPriorityFeePerGas)
+		if dec.MaxFeePerGas == nil {
+			return errors.New("missing required field 'maxFeePerGas' for txdata")
+		}
+		itx.SenderTx.GasFeeCap = (*big.Int)(dec.MaxFeePerGas)
+		if dec.Gas == nil {
+			return errors.New("missing required field 'gas' for txdata")
+		}
+		itx.SenderTx.Gas = uint64(*dec.Gas)
+		if dec.Value == nil {
+			return errors.New("missing required field 'value' in transaction")
+		}
+		itx.SenderTx.Value = (*big.Int)(dec.Value)
+		if dec.Data == nil {
+			return errors.New("missing required field 'input' in transaction")
+		}
+		itx.SenderTx.Data = *dec.Data
+		if dec.V == nil {
+			return errors.New("missing required field 'v' in transaction")
+		}
+		itx.SenderTx.V = (*big.Int)(dec.V)
+		if dec.R == nil {
+			return errors.New("missing required field 'r' in transaction")
+		}
+		itx.SenderTx.R = (*big.Int)(dec.R)
+		if dec.S == nil {
+			return errors.New("missing required field 's' in transaction")
+		}
+		itx.SenderTx.S = (*big.Int)(dec.S)
+		withSignature := itx.SenderTx.V.Sign() != 0 || itx.SenderTx.R.Sign() != 0 || itx.SenderTx.S.Sign() != 0
+		if withSignature {
+			if err := sanityCheckSignature(itx.SenderTx.V, itx.SenderTx.R, itx.SenderTx.S, false); err != nil {
+				return err
+			}
+		}
+		if dec.FeePayer == nil {
+			return errors.New("missing required field 'feePayer' in transaction")
+		}
+		itx.FeePayer = dec.FeePayer
+		if dec.FV == nil {
+			return errors.New("missing required field 'fv' in transaction")
+		}
+		itx.FV = (*big.Int)(dec.FV)
+		if dec.FR == nil {
+			return errors.New("missing required field 'fr' in transaction")
+		}
+		itx.FR = (*big.Int)(dec.FR)
+		if dec.FS == nil {
+			return errors.New("missing required field 'fs' in transaction")
+		}
+		itx.FS = (*big.Int)(dec.FS)
+		withSignature = itx.FV.Sign() != 0 || itx.FR.Sign() != 0 || itx.FS.Sign() != 0
+		if withSignature {
+			if err := sanityCheckSignature(itx.FV, itx.FR, itx.FS, false); err != nil {
 				return err
 			}
 		}

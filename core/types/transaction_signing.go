@@ -24,7 +24,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -175,7 +174,7 @@ func GetSender(signer Signer, tx *Transaction) *common.Address {
 
 // fee delegate
 func FeePayer(signer Signer, tx *Transaction) (common.Address, error) {
-	if sc := tx.feepayer.Load(); sc != nil {
+	if sc := tx.feePayer.Load(); sc != nil {
 		sigCache := sc.(sigCache)
 		// If the signer used to derive from in a previous
 		// call is not the same as used current, invalidate
@@ -186,37 +185,12 @@ func FeePayer(signer Signer, tx *Transaction) (common.Address, error) {
 	}
 
 	addr, err := signer.Sender(tx)
-	log.Info("FeePayerSender", "addr", addr)
+
 	if err != nil {
 		return common.Address{}, err
 	}
-	tx.feepayer.Store(sigCache{signer: signer, from: addr})
+	tx.feePayer.Store(sigCache{signer: signer, from: addr})
 	return addr, nil
-}
-
-// set sender
-func SetFeePayerSender(signer Signer, tx *Transaction, from common.Address) {
-	if sc := tx.feepayer.Load(); sc != nil {
-		sigCache := sc.(sigCache)
-		if sigCache.signer.Equal(signer) {
-			return
-		}
-	}
-	tx.feepayer.Store(sigCache{signer: signer, from: from})
-}
-
-// get feepayer
-func GetFeePayerSender(signer Signer, tx *Transaction) *common.Address {
-	if sc := tx.feepayer.Load(); sc != nil {
-		sigCache := sc.(sigCache)
-		// If the signer used to derive from in a previous
-		// call is not the same as used current, invalidate
-		// the cache.
-		if sigCache.signer.Equal(signer) {
-			return &sigCache.from
-		}
-	}
-	return nil
 }
 
 // Signer encapsulates transaction signature handling. The name of this type is slightly
@@ -250,7 +224,7 @@ func NewFeeDelegateSigner(chainId *big.Int) Signer {
 }
 
 func (s feeDelegateSigner) Sender(tx *Transaction) (common.Address, error) {
-	if tx.Type() != FeeDelegateLegacyTxType && tx.Type() != FeeDelegateDynamicFeeTxType {
+	if tx.Type() != FeeDelegateDynamicFeeTxType {
 		return s.londonSigner.Sender(tx)
 	}
 	V, R, S := tx.RawFeePayerSignatureValues()
@@ -268,7 +242,7 @@ func (s feeDelegateSigner) Equal(s2 Signer) bool {
 	return ok && x.chainId.Cmp(s.chainId) == 0
 }
 
-func (s feeDelegateSigner) SignatureValuesFeeDelegateDynamicFeeTx(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
+func (s feeDelegateSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
 	txdata, ok := tx.inner.(*FeeDelegateDynamicFeeTx)
 
 	if !ok {
@@ -283,75 +257,30 @@ func (s feeDelegateSigner) SignatureValuesFeeDelegateDynamicFeeTx(tx *Transactio
 	V = big.NewInt(int64(sig[64]))
 	return R, S, V, nil
 }
-func (s feeDelegateSigner) SignatureValuesFeeDelegateLegacyTx(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
-	txdata, ok := tx.inner.(*FeeDelegateLegacyTx)
-
-	if !ok {
-		return s.londonSigner.SignatureValues(tx, sig)
-	}
-	// Check that chain ID of tx matches the signer. We also accept ID zero here,
-	// because it indicates that the chain ID was not specified in the tx.
-	if txdata.SenderTx.chainID().Sign() != 0 && txdata.SenderTx.chainID().Cmp(s.chainId) != 0 {
-		return nil, nil, nil, ErrInvalidChainId
-	}
-	R, S, _ = decodeSignature(sig)
-	V = big.NewInt(int64(sig[64]))
-	return R, S, V, nil
-}
-func (s feeDelegateSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
-	if tx.Type() == FeeDelegateDynamicFeeTxType {
-		return s.SignatureValuesFeeDelegateDynamicFeeTx(tx, sig)
-	}
-	if tx.Type() == FeeDelegateLegacyTxType {
-		return s.SignatureValuesFeeDelegateLegacyTx(tx, sig)
-	}
-	return nil, nil, nil, errors.New("invalid tx.type for signer")
-}
 
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s feeDelegateSigner) Hash(tx *Transaction) common.Hash {
 	senderV, senderR, senderS := tx.RawSignatureValues()
-	if tx.Type() == FeeDelegateLegacyTxType {
-		return prefixedRlpHash(
-			tx.Type(),
+	return prefixedRlpHash(
+		tx.Type(),
+		[]interface{}{
 			[]interface{}{
-				[]interface{}{
-					tx.Nonce(),
-					tx.GasPrice(),
-					tx.Gas(),
-					tx.To(),
-					tx.Value(),
-					tx.Data(),
-					senderV,
-					senderR,
-					senderS,
-				},
-				tx.FeePayer(),
-			})
-	}
-	if tx.Type() == FeeDelegateDynamicFeeTxType {
-		return prefixedRlpHash(
-			tx.Type(),
-			[]interface{}{
-				[]interface{}{
-					s.chainId,
-					tx.Nonce(),
-					tx.GasTipCap(),
-					tx.GasFeeCap(),
-					tx.Gas(),
-					tx.To(),
-					tx.Value(),
-					tx.Data(),
-					tx.AccessList(),
-					senderV,
-					senderR,
-					senderS,
-				},
-				tx.FeePayer(),
-			})
-	}
-	return s.londonSigner.Hash(tx)
+				s.chainId,
+				tx.Nonce(),
+				tx.GasTipCap(),
+				tx.GasFeeCap(),
+				tx.Gas(),
+				tx.To(),
+				tx.Value(),
+				tx.Data(),
+				tx.AccessList(),
+				senderV,
+				senderR,
+				senderS,
+			},
+			tx.FeePayer(),
+		})
 }
 
 type londonSigner struct{ eip2930Signer }
@@ -370,7 +299,6 @@ func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
 		return s.eip2930Signer.Sender(tx)
 	}
 	V, R, S := tx.RawSignatureValues()
-
 	// DynamicFee txs are defined to use 0 and 1 as their recovery
 	// id, add 27 to become equivalent to unprotected Homestead signatures.
 	V = new(big.Int).Add(V, big.NewInt(27))
@@ -445,9 +373,8 @@ func (s eip2930Signer) Equal(s2 Signer) bool {
 
 func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 	V, R, S := tx.RawSignatureValues()
-
 	switch tx.Type() {
-	case LegacyTxType, FeeDelegateLegacyTxType: // fee delegate
+	case LegacyTxType:
 		if !tx.Protected() {
 			return HomesteadSigner{}.Sender(tx)
 		}
@@ -488,7 +415,7 @@ func (s eip2930Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 // It does not uniquely identify the transaction.
 func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 	switch tx.Type() {
-	case LegacyTxType, FeeDelegateLegacyTxType: // fee delegate
+	case LegacyTxType:
 		return rlpHash([]interface{}{
 			tx.Nonce(),
 			tx.GasPrice(),

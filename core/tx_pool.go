@@ -393,6 +393,18 @@ func (pool *TxPool) loop() {
 		case <-evict.C:
 			pool.mu.Lock()
 			for addr := range pool.queue {
+				// fee delegate
+				// check feePayer's balance
+				list := pool.queue[addr].Flatten()
+				for _, tx := range list {
+					if tx.FeePayer() != nil {
+						if pool.currentState.GetBalance(*tx.FeePayer()).Cmp(tx.FeePayerCost()) < 0 {
+							pool.removeTx(tx.Hash(), true)
+							queuedEvictionMeter.Mark(int64(1))
+						}
+					}
+				}
+
 				// Skip local transactions from the eviction mechanism
 				if pool.locals.contains(addr) {
 					continue
@@ -684,17 +696,16 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// cost == V + GP * GL
 
 	// fee delegate
-	if tx.Type() == types.FeeDelegateDynamicFeeTxType || tx.Type() == types.FeeDelegateLegacyTxType {
+	if tx.Type() == types.FeeDelegateDynamicFeeTxType {
 		// Make sure the transaction is signed properly.
-		feepayer, err := types.FeePayer(types.NewFeeDelegateSigner(pool.chainconfig.ChainID), tx)
-		if *tx.FeePayer() != feepayer || err != nil {
+		feePayer, err := types.FeePayer(types.NewFeeDelegateSigner(pool.chainconfig.ChainID), tx)
+		if *tx.FeePayer() != feePayer || err != nil {
 			return ErrInvalidFeePayer
 		}
-		costFeePayer := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
-		if pool.currentState.GetBalance(feepayer).Cmp(costFeePayer) < 0 {
+		if pool.currentState.GetBalance(feePayer).Cmp(tx.FeePayerCost()) < 0 {
 			return ErrFeePayerInsufficientFunds
 		}
-		if pool.currentState.GetBalance(from).Cmp(tx.Value()) < 0 {
+		if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
 			return ErrFromInsufficientFunds
 		}
 	} else {
@@ -1111,11 +1122,6 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 	}
 }
 
-// fee delegate
-func (pool *TxPool) RemoveFeeDelegateTx(hash common.Hash, outofbound bool) {
-	pool.removeTx(hash, outofbound)
-}
-
 // requestReset requests a pool reset to the new head block.
 // The returned channel is closed when the reset has occurred.
 func (pool *TxPool) requestReset(oldHead *types.Header, newHead *types.Header) chan struct{} {
@@ -1408,6 +1414,19 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 		log.Trace("Removed old queued transactions", "count", len(forwards))
 		// Drop all transactions that are too costly (low balance or out of gas)
 		drops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
+
+		// fee delegate
+		for _, tx := range list.Flatten() {
+			if tx.FeePayer() != nil {
+				feePayer := *tx.FeePayer()
+				if pool.currentState.GetBalance(feePayer).Cmp(tx.FeePayerCost()) < 0 {
+					log.Trace("promoteExecutables", "hash", tx.Hash().String())
+					list.Remove(tx)
+					drops = append(drops, tx)
+				}
+			}
+		}
+
 		for _, tx := range drops {
 			hash := tx.Hash()
 			pool.all.Remove(hash)
@@ -1605,6 +1624,19 @@ func (pool *TxPool) demoteUnexecutables() {
 		}
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
 		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
+
+		// fee delegate
+		for _, tx := range list.Flatten() {
+			if tx.FeePayer() != nil {
+				feePayer := *tx.FeePayer()
+				if pool.currentState.GetBalance(feePayer).Cmp(tx.FeePayerCost()) < 0 {
+					log.Trace("demoteUnexecutables", "hash", tx.Hash().String())
+					list.Remove(tx)
+					drops = append(drops, tx)
+				}
+			}
+		}
+
 		for _, tx := range drops {
 			hash := tx.Hash()
 			log.Trace("Removed unpayable pending transaction", "hash", hash)

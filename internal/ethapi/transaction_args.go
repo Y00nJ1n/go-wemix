@@ -273,7 +273,6 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 		}
 		// fee delegate
 		if args.FeePayer != nil && args.V != nil && args.R != nil && args.S != nil {
-			log.Info("tx_arg", "FeeDelegateDynamicFeeTx")
 			SenderTx := types.DynamicFeeTx{
 				To:         args.To,
 				ChainID:    (*big.Int)(args.ChainID),
@@ -288,13 +287,11 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 				R:          (*big.Int)(args.R),
 				S:          (*big.Int)(args.S),
 			}
-			log.Info("tx_arg", "FeeDelegateDynamicFeeTx SenderTx=", SenderTx)
 			FeeDelegateDynamicFeeTx := &types.FeeDelegateDynamicFeeTx{
 				FeePayer: args.FeePayer,
 			}
 
 			FeeDelegateDynamicFeeTx.SetSenderTx(SenderTx)
-			log.Info("tx_arg", "FeeDelegateDynamicFeeTx=", FeeDelegateDynamicFeeTx)
 			return types.NewTx(FeeDelegateDynamicFeeTx)
 		}
 	case args.AccessList != nil:
@@ -316,28 +313,6 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			GasPrice: (*big.Int)(args.GasPrice),
 			Value:    (*big.Int)(args.Value),
 			Data:     args.data(),
-		}
-		// fee delegate
-		if args.FeePayer != nil {
-			SenderTx := types.LegacyTx{
-				To:       args.To,
-				Nonce:    uint64(*args.Nonce),
-				Gas:      uint64(*args.Gas),
-				GasPrice: (*big.Int)(args.GasPrice),
-				Value:    (*big.Int)(args.Value),
-				Data:     args.data(),
-				V:        (*big.Int)(args.V),
-				R:        (*big.Int)(args.R),
-				S:        (*big.Int)(args.S),
-			}
-			log.Info("tx_arg", "FeeDelegateLegacyTx SenderTx=", SenderTx)
-			FeeDelegateLegacyTx := &types.FeeDelegateLegacyTx{
-				FeePayer: args.FeePayer,
-			}
-
-			FeeDelegateLegacyTx.SetSenderTx(SenderTx)
-			log.Info("tx_arg", "FeeDelegateLegacyTx=", FeeDelegateLegacyTx)
-			return types.NewTx(FeeDelegateLegacyTx)
 		}
 	}
 	return types.NewTx(data)

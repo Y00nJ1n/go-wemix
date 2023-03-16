@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	wemixminer "github.com/ethereum/go-ethereum/wemix/miner"
 )
@@ -207,16 +206,23 @@ func (st *StateTransition) buyGas() error {
 	}
 	// fee delegate
 	if st.msg.FeePayer() != nil {
-		if st.gasFeeCap != nil {
-			mgval = new(big.Int).SetUint64(st.msg.Gas())
-			mgval = mgval.Mul(mgval, st.gasFeeCap)
-		}
-		feepayer := *st.msg.FeePayer()
-		if have, want := st.state.GetBalance(feepayer), mgval; have.Cmp(want) < 0 {
-			return ErrFeePayerInsufficientFunds
-		}
-		if have, want := st.state.GetBalance(st.msg.From()), st.value; have.Cmp(want) < 0 {
-			return fmt.Errorf("%w: sender address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
+		FDmgval := new(big.Int).SetUint64(st.msg.Gas())
+		FDmgval = FDmgval.Mul(FDmgval, st.gasFeeCap)
+		feePayer := *st.msg.FeePayer()
+		if feePayer == st.msg.From() {
+			FDbalanceCheck := new(big.Int).SetUint64(st.msg.Gas())
+			FDbalanceCheck = FDbalanceCheck.Mul(FDbalanceCheck, st.gasFeeCap)
+			FDbalanceCheck.Add(FDbalanceCheck, st.value)
+			if have, want := st.state.GetBalance(feePayer), FDbalanceCheck; have.Cmp(want) < 0 {
+				return ErrFeePayerInsufficientFunds
+			}
+		} else {
+			if have, want := st.state.GetBalance(feePayer), FDmgval; have.Cmp(want) < 0 {
+				return ErrFeePayerInsufficientFunds
+			}
+			if have, want := st.state.GetBalance(st.msg.From()), st.value; have.Cmp(want) < 0 {
+				return fmt.Errorf("%w: sender address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
+			}
 		}
 		if err := st.gp.SubGas(st.msg.Gas()); err != nil {
 			return err
@@ -224,7 +230,7 @@ func (st *StateTransition) buyGas() error {
 		st.gas += st.msg.Gas()
 
 		st.initialGas = st.msg.Gas()
-		st.state.SubBalance(feepayer, mgval)
+		st.state.SubBalance(feePayer, FDmgval)
 	} else {
 		if have, want := st.state.GetBalance(st.msg.From()), balanceCheck; have.Cmp(want) < 0 {
 			return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
@@ -402,12 +408,8 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 
 	// fee delegate
 	if st.msg.FeePayer() != nil {
-		log.Info("refundGas", "feepayer", *st.msg.FeePayer(), "bal", st.state.GetBalance(*st.msg.FeePayer()), "remaining", remaining)
 		st.state.AddBalance(*st.msg.FeePayer(), remaining)
 	} else {
-		if remaining.Cmp(new(big.Int).SetUint64(0)) > 0 {
-			log.Info("refundGas", "from", st.msg.From(), "bal", st.state.GetBalance(st.msg.From()), "remaining", remaining)
-		}
 		st.state.AddBalance(st.msg.From(), remaining)
 	}
 	// Also return remaining gas to the block gas counter so it is

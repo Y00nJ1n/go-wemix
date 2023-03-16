@@ -45,8 +45,7 @@ const (
 	LegacyTxType = iota
 	AccessListTxType
 	DynamicFeeTxType
-	FeeDelegateDynamicFeeTxType = iota + 20 // fee delegate
-	FeeDelegateLegacyTxType
+	FeeDelegateDynamicFeeTxType = 23 // fee delegate
 )
 
 // Transaction is an Ethereum transaction.
@@ -58,7 +57,7 @@ type Transaction struct {
 	hash     atomic.Value
 	size     atomic.Value
 	from     atomic.Value
-	feepayer atomic.Value // fee delegate
+	feePayer atomic.Value // fee delegate
 }
 
 type TransactionEx struct {
@@ -195,13 +194,9 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		var inner DynamicFeeTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
-		// fee delegate
+	// dee delegate
 	case FeeDelegateDynamicFeeTxType:
 		var inner FeeDelegateDynamicFeeTx
-		err := rlp.DecodeBytes(b[1:], &inner)
-		return &inner, err
-	case FeeDelegateLegacyTxType:
-		var inner FeeDelegateLegacyTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
 	default:
@@ -314,13 +309,36 @@ func (tx *Transaction) To() *common.Address {
 // Cost returns gas * gasPrice + value.
 func (tx *Transaction) Cost() *big.Int {
 	// fee delegate
-	if tx.Type() == FeeDelegateDynamicFeeTxType || tx.Type() == FeeDelegateLegacyTxType {
-		total := tx.Value()
-		return total
+	if tx.Type() == FeeDelegateDynamicFeeTxType {
+		signer := LatestSignerForChainID(tx.ChainId())
+		from, _ := Sender(signer, tx)
+		if *tx.FeePayer() != from {
+			total := tx.Value()
+			return total
+		} else {
+			total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
+			total.Add(total, tx.Value())
+			return total
+		}
 	}
 	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
 	total.Add(total, tx.Value())
 	return total
+}
+
+// fee delegate
+// FeePayerCost returns gas * gasPrice + value.
+func (tx *Transaction) FeePayerCost() *big.Int {
+	signer := LatestSignerForChainID(tx.ChainId())
+	from, _ := Sender(signer, tx)
+	if *tx.FeePayer() != from {
+		total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
+		return total
+	} else {
+		total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
+		total.Add(total, tx.Value())
+		return total
+	}
 }
 
 // RawSignatureValues returns the V, R, S signature values of the transaction.
@@ -654,7 +672,7 @@ type Message struct {
 	accessList AccessList
 	isFake     bool
 	// fee delegate
-	feepayer *common.Address
+	feePayer *common.Address
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isFake bool) Message {
@@ -689,7 +707,7 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	}
 	// fee delegate
 	if tx.FeePayer() != nil {
-		msg.feepayer = tx.FeePayer()
+		msg.feePayer = tx.FeePayer()
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -713,7 +731,7 @@ func (m Message) AccessList() AccessList { return m.accessList }
 func (m Message) IsFake() bool           { return m.isFake }
 
 // fee delegate
-func (m Message) FeePayer() *common.Address { return m.feepayer }
+func (m Message) FeePayer() *common.Address { return m.feePayer }
 
 // copyAddressPtr copies an address.
 func copyAddressPtr(a *common.Address) *common.Address {

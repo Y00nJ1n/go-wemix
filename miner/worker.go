@@ -1013,13 +1013,6 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
 			txs.Pop()
 
-		case errors.Is(err, core.ErrFeePayerInsufficientFunds):
-			if tx.Type() == types.FeeDelegateDynamicFeeTxType || tx.Type() == types.FeeDelegateLegacyTxType {
-				w.eth.TxPool().RemoveFeeDelegateTx(tx.Hash(), true)
-				log.Warn("RemoveFeeDelegateTx", "feePayer", tx.FeePayer(), "type", tx.Type(), "hash", tx.Hash())
-				txs.Pop()
-			}
-
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
 			// nonce-too-high clause will prevent us from executing in vain).

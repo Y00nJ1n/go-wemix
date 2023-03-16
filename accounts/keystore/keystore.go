@@ -284,7 +284,7 @@ func (ks *KeyStore) SignTx(a accounts.Account, tx *types.Transaction, chainID *b
 		return nil, ErrLocked
 	}
 	// fee delegate
-	if tx.Type() == types.FeeDelegateDynamicFeeTxType || tx.Type() == types.FeeDelegateLegacyTxType {
+	if tx.Type() == types.FeeDelegateDynamicFeeTxType {
 		signer := types.NewFeeDelegateSigner(chainID)
 		return types.SignTx(tx, signer, unlockedKey.PrivateKey)
 	}
@@ -314,7 +314,7 @@ func (ks *KeyStore) SignTxWithPassphrase(a accounts.Account, passphrase string, 
 	}
 	defer zeroKey(key.PrivateKey)
 	// fee delegate
-	if tx.Type() == types.FeeDelegateDynamicFeeTxType || tx.Type() == types.FeeDelegateLegacyTxType {
+	if tx.Type() == types.FeeDelegateDynamicFeeTxType {
 		signer := types.NewFeeDelegateSigner(chainID)
 		return types.SignTx(tx, signer, key.PrivateKey)
 	}
