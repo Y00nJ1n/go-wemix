@@ -1632,6 +1632,12 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	}
 
 	if !wemixminer.IsPoW() { // Wemix
+		parent := w.chain.CurrentBlock()
+		height := new(big.Int).Add(parent.Number(), common.Big1)
+		getCoinbase, err := wemixminer.GetCoinbase(height)
+		if err == nil {
+			work.coinbase = getCoinbase
+		}
 		if !w.commitTransactionsEx(work, interrupt, start) {
 			w.commitEx(work, w.fullTaskHook, true, start)
 		}

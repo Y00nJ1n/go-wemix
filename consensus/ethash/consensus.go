@@ -618,14 +618,14 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 
 	// sign header.Root with node's private key
-	if !wemixminer.IsPoW() {
-		coinbase, err := wemixminer.GetCoinbase(header.Number)
-		if err != nil {
-			return nil, err
-		} else {
-			header.Coinbase = coinbase
-		}
-	}
+	//if !wemixminer.IsPoW() {
+	//	coinbase, err := wemixminer.GetCoinbase(header.Number)
+	//	if err != nil {
+	//		return nil, err
+	//	} else {
+	//		header.Coinbase = coinbase
+	//	}
+	//}
 
 	// Finalize block
 	if err := ethash.Finalize(chain, header, state, txs, uncles); err != nil {
