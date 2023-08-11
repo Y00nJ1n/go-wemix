@@ -1633,8 +1633,7 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 
 	if !wemixminer.IsPoW() { // Wemix
 		parent := w.chain.CurrentBlock()
-		height := new(big.Int).Add(parent.Number(), common.Big1)
-		getCoinbase, err := wemixminer.GetCoinbase(height)
+		getCoinbase, err := wemixminer.GetCoinbase(parent.Number())
 		if err == nil {
 			work.coinbase = getCoinbase
 		}
