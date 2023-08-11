@@ -616,6 +616,17 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
 // uncle rewards, setting the final state and assembling the block.
 func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+
+	// sign header.Root with node's private key
+	if !wemixminer.IsPoW() {
+		coinbase, err := wemixminer.GetCoinbase(header.Number)
+		if err != nil {
+			return nil, err
+		} else {
+			header.Coinbase = coinbase
+		}
+	}
+
 	// Finalize block
 	if err := ethash.Finalize(chain, header, state, txs, uncles); err != nil {
 		return nil, err
@@ -623,11 +634,10 @@ func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 
 	// sign header.Root with node's private key
 	if !wemixminer.IsPoW() {
-		coinbase, sig, err := wemixminer.SignBlock(header.Number, header.Root)
+		_, sig, err := wemixminer.SignBlock(header.Number, header.Root)
 		if err != nil {
 			return nil, err
 		} else {
-			header.Coinbase = coinbase
 			header.MinerNodeSig = sig
 		}
 	}
