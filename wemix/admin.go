@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
@@ -119,6 +120,8 @@ type rewardParameters struct {
 	members                                      []*wemixMember
 	distributionMethod                           []*big.Int
 	blocksPer                                    int64
+	foundationBurnAmount                         *big.Int        // zero minting parameters
+	foundationAddress                            *common.Address // zero minting parameters
 }
 
 var (
@@ -470,6 +473,22 @@ func (ma *wemixAdmin) getRewardParams(ctx context.Context, height *big.Int) (*re
 	rp.distributionMethod = make([]*big.Int, 4)
 	if err = metclient.CallContract(ctx, env, "getBlockRewardDistributionMethod", nil, &rp.distributionMethod, height); err != nil {
 		return nil, err
+	}
+
+	// zero minting getfoundationBurnAmount
+	if err = metclient.CallContract(ctx, env, "getfoundationBurnAmount", nil, &rp.foundationBurnAmount, height); err != nil {
+		// ignore error
+		rp.foundationBurnAmount = new(big.Int).Set(common.Big0)
+	}
+
+	// zero minting getfoundationAddress
+	var foundationAddress common.Address
+	if err = metclient.CallContract(ctx, env, "getfoundationAddress", nil, &foundationAddress, height); err != nil {
+		// ignore error
+		rp.foundationAddress = nil
+	} else {
+		rp.foundationAddress = &common.Address{}
+		rp.foundationAddress.SetBytes(foundationAddress.Bytes())
 	}
 
 	var addr common.Address
@@ -1146,7 +1165,7 @@ func distributeRewards(height *big.Int, rp *rewardParameters, fees *big.Int) ([]
 	return rewards, nil
 }
 
-func (ma *wemixAdmin) calculateRewards(num, blockReward, fees *big.Int, addBalance func(common.Address, *big.Int)) (coinbase *common.Address, rewards []byte, err error) {
+func (ma *wemixAdmin) calculateRewards(isBrioche bool, num, blockReward, fees *big.Int, addBalance func(common.Address, *big.Int), getBalance func(common.Address) *big.Int) (coinbase *common.Address, rewards []byte, err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1155,6 +1174,24 @@ func (ma *wemixAdmin) calculateRewards(num, blockReward, fees *big.Int, addBalan
 		// all goes to the coinbase
 		err = wemixminer.ErrNotInitialized
 		return
+	}
+
+	if isBrioche {
+		if addBalance != nil && getBalance != nil && rp.foundationAddress != nil {
+			minAmount := math.BigMin(rp.rewardAmount, rp.foundationBurnAmount)
+			rp.rewardAmount = new(big.Int).Set(minAmount)
+			rp.foundationBurnAmount = new(big.Int).Set(minAmount)
+			foundationBalance := getBalance(*rp.foundationAddress)
+			if foundationBalance.Cmp(rp.foundationBurnAmount) < 0 {
+				rp.rewardAmount = new(big.Int).Set(common.Big0)
+				rp.foundationBurnAmount = new(big.Int).Set(common.Big0)
+				log.Warn("zero minting: insufficient funds for foundationAddress", "balance", foundationBalance)
+			}
+		} else {
+			rp.rewardAmount = new(big.Int).Set(common.Big0)
+			rp.foundationBurnAmount = new(big.Int).Set(common.Big0)
+			log.Warn("zero minting: config is invalid")
+		}
 	}
 
 	if (rp.staker == nil && rp.ecoSystem == nil && rp.maintenance == nil) || len(rp.members) == 0 {
@@ -1189,14 +1226,27 @@ func (ma *wemixAdmin) calculateRewards(num, blockReward, fees *big.Int, addBalan
 		for _, i := range rr {
 			addBalance(i.Addr, i.Reward)
 		}
+
+		if isBrioche {
+			if rp.foundationAddress != nil && rp.foundationBurnAmount.Cmp(common.Big0) > 0 {
+				rp.foundationBurnAmount.Mul(rp.foundationBurnAmount, new(big.Int).SetInt64(-1))
+				addBalance(*rp.foundationAddress, rp.foundationBurnAmount)
+				rr = append([]reward{reward{
+					Addr:   *rp.foundationAddress,
+					Reward: rp.foundationBurnAmount,
+				}}, rr...)
+			} else {
+				log.Warn("zero minting: ", "foundationAddress", rp.foundationAddress, "foundationBurnAmount", rp.foundationBurnAmount)
+			}
+		}
 	}
 
 	rewards, err = json.Marshal(rr)
 	return
 }
 
-func calculateRewards(num, blockReward, fees *big.Int, addBalance func(common.Address, *big.Int)) (*common.Address, []byte, error) {
-	return admin.calculateRewards(num, blockReward, fees, addBalance)
+func calculateRewards(isBrioche bool, num, blockReward, fees *big.Int, addBalance func(common.Address, *big.Int), getBalance func(common.Address) *big.Int) (*common.Address, []byte, error) {
+	return admin.calculateRewards(isBrioche, num, blockReward, fees, addBalance, getBalance)
 }
 
 func verifyRewards(num *big.Int, rewards string) error {

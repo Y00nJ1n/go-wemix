@@ -706,11 +706,17 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		state.AddBalance(header.Coinbase, reward)
 	} else {
 		blockReward = WemixBlockReward
+		isBrioche := config.IsBrioche(header.Number)
+
 		coinbase, rewards, err := wemixminer.CalculateRewards(
-			header.Number, blockReward, header.Fees,
+			isBrioche, header.Number, blockReward, header.Fees,
 			func(addr common.Address, amt *big.Int) {
 				state.AddBalance(addr, amt)
+			},
+			func(addr common.Address) *big.Int {
+				return state.GetBalance(addr)
 			})
+
 		if err == nil {
 			header.Rewards = rewards
 			if coinbase != nil {
