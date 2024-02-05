@@ -119,6 +119,7 @@ type rewardParameters struct {
 	members                                      []*wemixMember
 	distributionMethod                           []*big.Int
 	blocksPer                                    int64
+	foundation                                   *common.Address // zero minting parameters
 }
 
 var (
@@ -501,6 +502,16 @@ func (ma *wemixAdmin) getRewardParams(ctx context.Context, height *big.Int) (*re
 	} else {
 		rp.feeCollector = &common.Address{}
 		rp.feeCollector.SetBytes(addr.Bytes())
+	}
+
+	// zero minting get foundation
+	input = []interface{}{metclient.ToBytes32("Foundation")}
+	if err = metclient.CallContract(ctx, reg, "getContractAddress", input, &addr, height); err != nil {
+		// ignore error
+		rp.foundation = nil
+	} else {
+		rp.foundation = &common.Address{}
+		rp.foundation.SetBytes(addr.Bytes())
 	}
 
 	rp.blocksPer, err = ma.getInt(ctx, env, height, "getBlocksPer")
@@ -1146,7 +1157,7 @@ func distributeRewards(height *big.Int, rp *rewardParameters, fees *big.Int) ([]
 	return rewards, nil
 }
 
-func (ma *wemixAdmin) calculateRewards(num, blockReward, fees *big.Int, addBalance func(common.Address, *big.Int)) (coinbase *common.Address, rewards []byte, err error) {
+func (ma *wemixAdmin) calculateRewards(isBrioche bool, num, blockReward, fees *big.Int, addBalance func(common.Address, *big.Int), getBalance func(common.Address) *big.Int) (coinbase *common.Address, rewards []byte, err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1155,6 +1166,19 @@ func (ma *wemixAdmin) calculateRewards(num, blockReward, fees *big.Int, addBalan
 		// all goes to the coinbase
 		err = wemixminer.ErrNotInitialized
 		return
+	}
+
+	if isBrioche {
+		if addBalance != nil && getBalance != nil && rp.foundation != nil {
+			foundationBalance := getBalance(*rp.foundation)
+			if foundationBalance.Cmp(rp.rewardAmount) < 0 {
+				rp.rewardAmount = new(big.Int).Set(common.Big0)
+				log.Warn("zero minting: insufficient funds for foundation", "balance", foundationBalance)
+			}
+		} else {
+			rp.rewardAmount = new(big.Int).Set(common.Big0)
+			log.Warn("zero minting: config is invalid")
+		}
 	}
 
 	if (rp.staker == nil && rp.ecoSystem == nil && rp.maintenance == nil) || len(rp.members) == 0 {
@@ -1189,14 +1213,28 @@ func (ma *wemixAdmin) calculateRewards(num, blockReward, fees *big.Int, addBalan
 		for _, i := range rr {
 			addBalance(i.Addr, i.Reward)
 		}
+
+		if isBrioche {
+			if rp.foundation != nil {
+				foundationBurnAmount := new(big.Int).Set(rp.rewardAmount)
+				foundationBurnAmount.Mul(foundationBurnAmount, new(big.Int).SetInt64(-1))
+				addBalance(*rp.foundation, foundationBurnAmount)
+				rr = append([]reward{reward{
+					Addr:   *rp.foundation,
+					Reward: foundationBurnAmount,
+				}}, rr...)
+			} else {
+				log.Warn("zero minting: burn does not run.", "foundation", rp.foundation, "burnAmount", rp.rewardAmount)
+			}
+		}
 	}
 
 	rewards, err = json.Marshal(rr)
 	return
 }
 
-func calculateRewards(num, blockReward, fees *big.Int, addBalance func(common.Address, *big.Int)) (*common.Address, []byte, error) {
-	return admin.calculateRewards(num, blockReward, fees, addBalance)
+func calculateRewards(isBrioche bool, num, blockReward, fees *big.Int, addBalance func(common.Address, *big.Int), getBalance func(common.Address) *big.Int) (*common.Address, []byte, error) {
+	return admin.calculateRewards(isBrioche, num, blockReward, fees, addBalance, getBalance)
 }
 
 func verifyRewards(num *big.Int, rewards string) error {

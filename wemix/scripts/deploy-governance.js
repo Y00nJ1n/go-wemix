@@ -64,6 +64,11 @@ var GovernanceDeployer = new function() {
                 throw "Invalid feecollector address " + data.feecollector
             data.feecollector = web3.toChecksumAddress(data.feecollector)
         }
+        if (data.foundation) {
+            if (!web3.isAddress(data.foundation))
+                throw "Invalid foundation address " + data.foundation
+            data.foundation = web3.toChecksumAddress(data.foundation)
+        }
     }
 
     // bytes packNum(int num)
@@ -73,7 +78,7 @@ var GovernanceDeployer = new function() {
     }
 
     // { "nodes": string, "stakes": string, "staker": address,
-    //   "ecosystem": address, "maintenance": address, "feecollector": address,
+    //   "ecosystem": address, "maintenance": address, "feecollector": address, "foundation": address,
     //   "env": { env variables } }
     // getInitialGovernanceMembersAndNodes(json data)
     this.getInitialGovernanceMembersAndNodes = function(data) {
@@ -124,6 +129,7 @@ var GovernanceDeployer = new function() {
             "ecosystem": data.ecosystem,
             "maintenance": data.maintenance,
             "feecollector": data.feecollector,
+            "foundation": data.foundation,
             "env": data.env
         }
     }
@@ -299,7 +305,10 @@ var GovernanceDeployer = new function() {
             txs[txs.length] = this.sendTx(registry.address, null,
                 registry.setContractDomain.getData(
                     "FeeCollector", initData.feecollector))
-
+        if (initData.foundation)
+            txs[txs.length] = this.sendTx(registry.address, null,
+                registry.setContractDomain.getData(
+                    "Foundation", initData.foundation))
         // no need to wait for the receipts for the above
 
         // 4. initialize environment storage data:

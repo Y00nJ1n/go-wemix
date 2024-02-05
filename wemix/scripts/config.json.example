@@ -4,6 +4,7 @@
   "ecosystem": "0x1be19928ed1dada205aec56ab85e0e2ab5670ad5",
   "maintenance": "0x900d9928ed1dada205aec56ab85e0e2ab5670ad5",
   "feecollector": "0x900d9928ed1dada205aec56ab85e0e2ab5670ad5",
+  "foundation": "0x900d9928ed1dada205aec56ab85e0e2ab5670ad5",
   "env": {
     "ballotDurationMin": 86400,
     "ballotDurationMax": 604800,

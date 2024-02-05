@@ -1703,8 +1703,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas, fees); err != nil {
 			if retryCount--; !wemixminer.IsPoW() && retryCount > 0 {
 				// make sure the previous block exists in order to calculate rewards distribution
+				isBrioche := bc.chainConfig.IsBrioche(block.Number())
 				for try := 100; try > 0; try-- {
-					if _, _, err := wemixminer.CalculateRewards(block.Number(), big.NewInt(0), big.NewInt(100000000), nil); err == nil {
+					if _, _, err := wemixminer.CalculateRewards(isBrioche, block.Number(), big.NewInt(0), big.NewInt(100000000), nil, nil); err == nil {
 						break
 					}
 					time.Sleep(100 * time.Millisecond)
