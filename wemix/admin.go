@@ -1173,11 +1173,10 @@ func (ma *wemixAdmin) calculateRewards(isBrioche bool, num, blockReward, fees *b
 			foundationBalance := getBalance(*rp.foundation)
 			if foundationBalance.Cmp(rp.rewardAmount) < 0 {
 				rp.rewardAmount = new(big.Int).Set(common.Big0)
-				log.Warn("zero minting: insufficient funds for foundation", "balance", foundationBalance)
+				log.Warn("zero minting: insufficient funds for foundation.", "number", num, "addr", rp.foundation, "balance", foundationBalance)
 			}
 		} else {
 			rp.rewardAmount = new(big.Int).Set(common.Big0)
-			log.Warn("zero minting: config is invalid")
 		}
 	}
 
@@ -1224,7 +1223,7 @@ func (ma *wemixAdmin) calculateRewards(isBrioche bool, num, blockReward, fees *b
 					Reward: foundationBurnAmount,
 				}}, rr...)
 			} else {
-				log.Warn("zero minting: burn does not run.", "foundation", rp.foundation, "burnAmount", rp.rewardAmount)
+				log.Warn("zero minting: burn does not run.", "number", num, "rewardAmount", rp.rewardAmount)
 			}
 		}
 	}
