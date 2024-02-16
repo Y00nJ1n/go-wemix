@@ -94,16 +94,16 @@ var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
 // PrecompiledContractsBrioche contains the default set of pre-compiled Ethereum
 // contracts used in the Brioche release.
 var PrecompiledContractsBrioche = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}):  &ecrecover{},
-	common.BytesToAddress([]byte{2}):  &sha256hash{},
-	common.BytesToAddress([]byte{3}):  &ripemd160hash{},
-	common.BytesToAddress([]byte{4}):  &dataCopy{},
-	common.BytesToAddress([]byte{5}):  &bigModExp{eip2565: true},
-	common.BytesToAddress([]byte{6}):  &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}):  &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}):  &bn256PairingIstanbul{},
-	common.BytesToAddress([]byte{9}):  &blake2F{},
-	common.BytesToAddress([]byte{10}): &vrfVerify{},
+	common.BytesToAddress([]byte{1}):    &ecrecover{},
+	common.BytesToAddress([]byte{2}):    &sha256hash{},
+	common.BytesToAddress([]byte{3}):    &ripemd160hash{},
+	common.BytesToAddress([]byte{4}):    &dataCopy{},
+	common.BytesToAddress([]byte{5}):    &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}):    &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}):    &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}):    &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}):    &blake2F{},
+	common.BytesToAddress([]byte{0xF0}): &vrfVerify{},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
