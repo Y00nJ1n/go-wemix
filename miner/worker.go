@@ -106,6 +106,8 @@ type environment struct {
 	blockGasLimit        *big.Int
 	baseFeeMaxChangeRate int64
 	gasTargetPercentage  int64
+	// Add BlackList
+	blackListMap map[common.Address]bool // The blacklist addresses map
 }
 
 // copy creates a deep copy of environment.
@@ -972,6 +974,23 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			txs.Pop()
 			continue
 		}
+		// Add BlackList
+		if env.blackListMap != nil && len(env.blackListMap) > 0 {
+			isblist := false
+			if env.blackListMap[from] {
+				log.Warn("included in the blacklist", "hash", tx.Hash(), "from", from)
+				isblist = true
+			}
+			if tx.To() != nil && env.blackListMap[*tx.To()] {
+				log.Warn("included in the blacklist", "hash", tx.Hash(), "to", *tx.To())
+				isblist = true
+			}
+			if isblist {
+				txs.Pop()
+				continue
+			}
+		}
+
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), env.tcount)
 
@@ -1617,6 +1636,10 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	if !wemixminer.IsPoW() { // Wemix
 		if coinbase, err := wemixminer.GetCoinbase(work.header.Number); err == nil {
 			work.coinbase = coinbase
+		}
+		// Add BlackList
+		if blackListMap, err := wemixminer.GetBlackListMap(big.NewInt(work.header.Number.Int64() - 1)); blackListMap != nil && err == nil {
+			work.blackListMap = blackListMap
 		}
 	}
 	if err != nil {

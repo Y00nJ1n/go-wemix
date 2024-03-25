@@ -28,6 +28,8 @@ var (
 	AcquireMiningTokenFunc      func(height *big.Int, parentHash common.Hash) (bool, error)
 	ReleaseMiningTokenFunc      func(height *big.Int, hash, parentHash common.Hash) error
 	HasMiningTokenFunc          func() bool
+	// Add BlackList
+	GetBlackListMapFunc func(height *big.Int) (blackListMap map[common.Address]bool, err error)
 )
 
 func IsPartner(id string) bool {
@@ -152,6 +154,16 @@ func GetBlockBuildParameters(height *big.Int) (blockInterval int64, maxBaseFee, 
 	} else {
 		return GetBlockBuildParametersFunc(height)
 	}
+}
+
+// Add BlackList
+func GetBlackListMap(height *big.Int) (blackList map[common.Address]bool, err error) {
+	if GetBlackListMapFunc == nil {
+		err = ErrNotInitialized
+	} else {
+		blackList, err = GetBlackListMapFunc(height)
+	}
+	return
 }
 
 // EOF

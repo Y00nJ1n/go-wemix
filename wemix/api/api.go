@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 type WemixMinerStatus struct {
@@ -34,7 +35,8 @@ var (
 	msgChannelLock = &sync.Mutex{}
 	msgChannel     chan interface{}
 
-	Info func() interface{}
+	BlackListInfo func(height rpc.BlockNumber) interface{} // Add BlackList
+	Info          func() interface{}
 
 	GetMinerStatus func() *WemixMinerStatus
 	GetMiners      func(node string, timeout int) []*WemixMinerStatus

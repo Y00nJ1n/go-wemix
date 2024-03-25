@@ -173,6 +173,11 @@ BEGIN { print "package wemix\n"; }					     \
   sub("^var[^(]*\\(","",$$0); sub("\\);$$","",$$0);			     \
   n = "Gov";								     \
   print "var " n "Abi = `{ \"contractName\": \"" n "\", \"abi\": " $$0 "}`"; \
+}									     \
+/^var BlackList_contract/ {							     \
+  sub("^var[^(]*\\(","",$$0); sub("\\);$$","",$$0);			     \
+  n = "BlackList";								     \
+  print "var " n "Abi = `{ \"contractName\": \"" n "\", \"abi\": " $$0 "}`"; \
 }'
 
 wemix/governance_abi.go: wemix/contracts/WemixGovernance.js

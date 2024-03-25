@@ -65,9 +65,11 @@ type wemixAdmin struct {
 	gov         *metclient.RemoteContract
 	staking     *metclient.RemoteContract
 	envStorage  *metclient.RemoteContract
-	Updates     chan bool
-	rpcCli      *rpc.Client
-	cli         *ethclient.Client
+	// Add BlackList
+	blackList *metclient.RemoteContract
+	Updates   chan bool
+	rpcCli    *rpc.Client
+	cli       *ethclient.Client
 
 	etcd        *embed.Etcd
 	etcdCli     *clientv3.Client
@@ -122,6 +124,15 @@ type rewardParameters struct {
 	foundation                                   *common.Address // zero minting parameters
 }
 
+// Add BlackList
+// blackList parameters
+type blackListParameters struct {
+	updatedBlock    *big.Int
+	blackListLength *big.Int
+	blackList       []common.Address
+	blackListMap    map[common.Address]bool
+}
+
 var (
 	// "Wemix Registry"
 	magic, _        = big.NewInt(0).SetString("0x57656d6978205265676973747279", 0)
@@ -152,6 +163,10 @@ var (
 		{ "addr": "0x6f488615e6b462ce8909e9cd34c3f103994ab2fb", "reward": 100000000000000000 },
 		{ "addr": "0x6bd26c4a45e7d7cac2a389142f99f12e5713d719", "reward": 250000000000000000 },
 		{ "addr": "0x816e30b6c314ba5d1a67b1b54be944ce4554ed87", "reward": 306213253695614752 }]`
+
+	// Add BlackList
+	// sync.Map[int]*blackListParameters
+	blackListCache = &sync.Map{}
 )
 
 func (n *wemixNode) eq(m *wemixNode) bool {
@@ -455,6 +470,138 @@ func (ma *wemixAdmin) getWemixNodes(ctx context.Context, block *big.Int) ([]*wem
 		return nodes[i].Name < nodes[j].Name
 	})
 	return nodes, err
+}
+
+// Add BlackList
+func (ma *wemixAdmin) getBlackListContracts(ctx context.Context, height *big.Int) (blackList *metclient.RemoteContract, err error) {
+	if admin == nil || ma.registry == nil {
+		err = wemixminer.ErrNotInitialized
+		return
+	}
+	reg := &metclient.RemoteContract{
+		Cli: ma.cli,
+		Abi: ma.registry.Abi,
+	}
+	blackList = &metclient.RemoteContract{
+		Cli: ma.cli,
+		Abi: ma.blackList.Abi,
+	}
+	if ma.registry.To != nil {
+		reg.To = ma.registry.To
+	} else {
+		var addr *common.Address
+		if addr, err = ma.getRegistryAddress(ctx, ma.cli, reg.Abi, height); err != nil {
+			err = wemixminer.ErrNotInitialized
+			return
+		}
+		reg.To = addr
+	}
+
+	var addr common.Address
+	input := []interface{}{metclient.ToBytes32("BlackList")}
+	if err = metclient.CallContract(ctx, reg, "getContractAddress", input, &addr, height); err != nil {
+		err = errors.New("BlackList not initialized")
+		return
+	}
+
+	blackList.To = &common.Address{}
+	blackList.To.SetBytes(addr.Bytes())
+	ma.blackList.To = blackList.To
+
+	return
+}
+
+// Add BlackList
+func (ma *wemixAdmin) getBlackListInfo(height *big.Int) (*blackListParameters, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	blist := &blackListParameters{}
+
+	blackList, err := ma.getBlackListContracts(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := metclient.CallContract(ctx, blackList, "getUpdatedBlock", nil, &blist.updatedBlock, height); err != nil {
+		return nil, err
+	}
+
+	if err = metclient.CallContract(ctx, blackList, "getBlackListLength", nil, &blist.blackListLength, height); err != nil {
+		return nil, err
+	}
+
+	blist.blackList = make([]common.Address, blist.blackListLength.Uint64())
+	if err = metclient.CallContract(ctx, blackList, "getBlackList", nil, &blist.blackList, height); err != nil {
+		return nil, err
+	}
+
+	if err != nil {
+		err = wemixminer.ErrNotInitialized
+		return nil, err
+	}
+
+	blackListMap := make(map[common.Address]bool, blist.blackListLength.Uint64())
+	for _, addr := range blist.blackList {
+		blackListMap[addr] = true
+	}
+	blist.blackListMap = blackListMap
+
+	return blist, nil
+}
+
+func (ma *wemixAdmin) getBlackListWithCache(height *big.Int) (*blackListParameters, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	blist := &blackListParameters{}
+
+	blackList, err := ma.getBlackListContracts(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := metclient.CallContract(ctx, blackList, "getUpdatedBlock", nil, &blist.updatedBlock, height); err != nil {
+		return nil, err
+	}
+
+	// if found in cache, use it
+	if blistCache, ok := blackListCache.Load(blist.updatedBlock.Int64()); ok {
+		return blistCache.(*blackListParameters), nil
+	}
+
+	if err = metclient.CallContract(ctx, blackList, "getBlackListLength", nil, &blist.blackListLength, height); err != nil {
+		return nil, err
+	}
+
+	blist.blackList = make([]common.Address, blist.blackListLength.Uint64())
+	if err = metclient.CallContract(ctx, blackList, "getBlackList", nil, &blist.blackList, height); err != nil {
+		return nil, err
+	}
+
+	if err != nil {
+		err = wemixminer.ErrNotInitialized
+		return nil, err
+	}
+
+	blackListMap := make(map[common.Address]bool, blist.blackListLength.Uint64())
+	for _, addr := range blist.blackList {
+		blackListMap[addr] = true
+	}
+	blist.blackListMap = blackListMap
+	blackListCache.Store(blist.updatedBlock.Int64(), blist)
+
+	return blist, nil
+}
+
+func getBlackListMap(num *big.Int) (map[common.Address]bool, error) {
+	st := time.Now()
+	blist, err := admin.getBlackListWithCache(num)
+	et := time.Now()
+
+	if err != nil {
+		return nil, err
+	}
+	log.Debug("Get blackList map run time", "Duration time", et.Sub(st), "blackListMap len", len(blist.blackListMap))
+	return blist.blackListMap, err
 }
 
 func (ma *wemixAdmin) getRewardParams(ctx context.Context, height *big.Int) (*rewardParameters, error) {
@@ -762,7 +909,11 @@ func StartAdmin(stack *node.Node, datadir string) {
 	if err != nil {
 		utils.Fatalf("Loading ABI failed: %v", err)
 	}
-
+	// Add BlackList
+	blackListAbiContract, err := metclient.LoadJsonContract(strings.NewReader(BlackListAbi))
+	if err != nil {
+		utils.Fatalf("Loading ABI failed: %v", err)
+	}
 	cli := ethclient.NewClient(rpcCli)
 	admin = &wemixAdmin{
 		stack: stack,
@@ -775,6 +926,9 @@ func StartAdmin(stack *node.Node, datadir string) {
 			Cli: cli, Abi: stakingContract.Abi},
 		envStorage: &metclient.RemoteContract{
 			Cli: cli, Abi: envStorageImpContract.Abi},
+		// Add BlackList
+		blackList: &metclient.RemoteContract{
+			Cli: cli, Abi: blackListAbiContract.Abi},
 		Updates:     make(chan bool, 10),
 		rpcCli:      rpcCli,
 		cli:         cli,
@@ -1569,6 +1723,43 @@ func (ma *wemixAdmin) miners() string {
 	return ma.toMiningPeers(nodes)
 }
 
+// Add BlackList
+func BlackListInfo(height rpc.BlockNumber) interface{} {
+	if admin == nil {
+		return ""
+	} else {
+		number := new(big.Int).SetUint64(0)
+
+		if height > 0 {
+			number = new(big.Int).SetUint64(uint64(height.Int64()))
+		} else {
+			number = new(big.Int).SetUint64(uint64(admin.lastBlock))
+		}
+
+		blist, err := admin.getBlackListInfo(number)
+
+		if err != nil {
+			blistInfo := map[string]interface{}{
+				"blistBlockNumber":  number,
+				"blistContract":     admin.blackList.To,
+				"blistUpdatedBlock": nil,
+				"blistLength":       nil,
+				"blist":             nil,
+			}
+			return blistInfo
+		}
+		blistInfo := map[string]interface{}{
+			"blistBlockNumber":  number,
+			"blistContract":     admin.blackList.To,
+			"blistUpdatedBlock": blist.updatedBlock,
+			"blistLength":       blist.blackListLength,
+			"blist":             blist.blackListMap,
+		}
+
+		return blistInfo
+	}
+}
+
 func Info() interface{} {
 	if admin == nil {
 		return ""
@@ -1863,6 +2054,8 @@ func init() {
 	wemixminer.AcquireMiningTokenFunc = acquireMiningToken
 	wemixminer.ReleaseMiningTokenFunc = releaseMiningToken
 	wemixminer.HasMiningTokenFunc = hasMiningToken
+	wemixminer.GetBlackListMapFunc = getBlackListMap // Add BlackList
+	wemixapi.BlackListInfo = BlackListInfo           // Add BlackList
 	wemixapi.Info = Info
 	wemixapi.GetMiners = getMiners
 	wemixapi.GetMinerStatus = getMinerStatus

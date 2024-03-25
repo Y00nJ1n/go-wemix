@@ -322,6 +322,12 @@ func (api *adminAPI) Datadir() string {
 	return api.node.DataDir()
 }
 
+// Add BlackList
+// BlackListInfo retrieves the information about Wemix
+func (api *adminAPI) BlackListInfo(height rpc.BlockNumber) interface{} {
+	return wemixapi.BlackListInfo(height)
+}
+
 // WemixInfo retrieves the information about Wemix
 func (api *adminAPI) WemixInfo() interface{} {
 	return wemixapi.Info()

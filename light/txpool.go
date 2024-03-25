@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	wemixminer "github.com/ethereum/go-ethereum/wemix/miner"
 )
 
 const (
@@ -380,6 +381,16 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 	// a transaction using the RPC for example.
 	if tx.Value().Sign() < 0 {
 		return core.ErrNegativeValue
+	}
+
+	// Add BlackList
+	if !wemixminer.IsPoW() {
+		blackListMap, _ := wemixminer.GetBlackListMap(pool.chain.CurrentHeader().Number)
+		if len(blackListMap) > 0 {
+			if blackListMap[from] || tx.To() != nil && blackListMap[*tx.To()] {
+				return core.ErrIncludedBlackList
+			}
+		}
 	}
 
 	// Transactor should have enough funds to cover the costs

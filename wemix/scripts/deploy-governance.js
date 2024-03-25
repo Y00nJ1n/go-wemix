@@ -274,6 +274,13 @@ var GovernanceDeployer = new function() {
         ballotStorage = this.resolveContract(BallotStorage_contract.abi, ballotStorage)
         staking = this.resolveContract(Staking_contract.abi, staking)
 
+        // Add BlackList
+        // deploy BlackList
+        var blacklist
+        blacklist = this.deployContract(BlackList_data)
+        this.log("Waiting for gov contract...")
+        blacklist = this.resolveContract(BlackList_contract.abi, blacklist)
+
         // 3. setup registry
         this.log("Setting registry...")
         txs.length = 0
@@ -289,6 +296,10 @@ var GovernanceDeployer = new function() {
         txs[txs.length] = this.sendTx(registry.address, null,
             registry.setContractDomain.getData(
                 "GovernanceContract", gov.address))
+        // Add BlackList
+        txs[txs.length] = this.sendTx(registry.address, null,
+            registry.setContractDomain.getData(
+                "BlackList", blacklist.address))
         if (initData.staker)
             txs[txs.length] = this.sendTx(registry.address, null,
                 registry.setContractDomain.getData(
@@ -367,7 +378,7 @@ var GovernanceDeployer = new function() {
         txs[txs.length] = this.sendStakingDeposit(staking.address, tmpStakingImp.deposit.getData(), web3.toBigNumber(bootNode.stake).toString(10));
         for(i=0;i<txs.length;i++){
             if (!this.checkReceipt(txs[i]))
-            throw "Failed to initialize data. Tx is " + txs[i]
+            throw "Failed to initialize data. Tx["+i+"] is " + txs[i]
         }
 
         if (!this.checkReceipt(txs[0]))
@@ -400,6 +411,7 @@ var GovernanceDeployer = new function() {
                  '  "BALLOT_STORAGE_ADDRESS": "' + ballotStorage.address + '",\n' +
                  '  "GOV_ADDRESS": "' + gov.address + '",\n' +
                  '  "GOV_IMP_ADDRESS": "' + govImp.address + '"\n' +
+                 '  "BLACKLIST_ADDRESS": "' + blacklist.address + '"\n' +
                  '}')
 
         return true
