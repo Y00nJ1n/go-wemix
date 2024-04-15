@@ -383,12 +383,12 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 		return core.ErrNegativeValue
 	}
 
-	// Add BlackList
+	// Add SRP
 	if !wemixminer.IsPoW() {
-		blackListMap, _ := wemixminer.GetBlackListMap(pool.chain.CurrentHeader().Number)
-		if len(blackListMap) > 0 {
-			if blackListMap[from] || tx.To() != nil && blackListMap[*tx.To()] {
-				return core.ErrIncludedBlackList
+		srpListMap, srpListSubscribe, _ := wemixminer.GetSRPListMap(pool.chain.CurrentHeader().Number)
+		if len(srpListMap) > 0 && srpListSubscribe {
+			if srpListMap[from] {
+				return core.ErrIncludedSRPList
 			}
 		}
 	}

@@ -109,7 +109,7 @@ var (
 	// is higher than the balance of the sender's account.
 	ErrSenderInsufficientFunds = errors.New("fee delegation: insufficient sender's funds for value")
 
-	// Add BlackList
-	// ErrIncludedBlackList is returned if the address included in the blacklist.
-	ErrIncludedBlackList = errors.New("included in the blacklist")
+	// Add SRP
+	// ErrIncludedSRPList is returned if the address included in the SRPlist.
+	ErrIncludedSRPList = errors.New("included in the SRPlist")
 )

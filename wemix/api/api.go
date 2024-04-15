@@ -35,8 +35,8 @@ var (
 	msgChannelLock = &sync.Mutex{}
 	msgChannel     chan interface{}
 
-	BlackListInfo func(height rpc.BlockNumber) interface{} // Add BlackList
-	Info          func() interface{}
+	SRPListInfo func(height rpc.BlockNumber) interface{} // Add SRP
+	Info        func() interface{}
 
 	GetMinerStatus func() *WemixMinerStatus
 	GetMiners      func(node string, timeout int) []*WemixMinerStatus

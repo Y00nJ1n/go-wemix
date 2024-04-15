@@ -174,9 +174,14 @@ BEGIN { print "package wemix\n"; }					     \
   n = "Gov";								     \
   print "var " n "Abi = `{ \"contractName\": \"" n "\", \"abi\": " $$0 "}`"; \
 }									     \
-/^var BlackList_contract/ {							     \
+/^var BallotStorageImp_contract/ {							     \
   sub("^var[^(]*\\(","",$$0); sub("\\);$$","",$$0);			     \
-  n = "BlackList";								     \
+  n = "BallotStorage";								     \
+  print "var " n "Abi = `{ \"contractName\": \"" n "\", \"abi\": " $$0 "}`"; \
+}									     \
+/^var SRPListImp_contract/ {							     \
+  sub("^var[^(]*\\(","",$$0); sub("\\);$$","",$$0);			     \
+  n = "SRPList";								     \
   print "var " n "Abi = `{ \"contractName\": \"" n "\", \"abi\": " $$0 "}`"; \
 }'
 

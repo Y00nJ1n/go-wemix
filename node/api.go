@@ -322,10 +322,10 @@ func (api *adminAPI) Datadir() string {
 	return api.node.DataDir()
 }
 
-// Add BlackList
-// BlackListInfo retrieves the information about Wemix
-func (api *adminAPI) BlackListInfo(height rpc.BlockNumber) interface{} {
-	return wemixapi.BlackListInfo(height)
+// Add SRP
+// SrpListInfo retrieves the information about Wemix
+func (api *adminAPI) SrpListInfo(height rpc.BlockNumber) interface{} {
+	return wemixapi.SRPListInfo(height)
 }
 
 // WemixInfo retrieves the information about Wemix

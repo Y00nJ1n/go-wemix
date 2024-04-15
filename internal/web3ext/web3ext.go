@@ -250,8 +250,8 @@ web3._extend({
 			params: 0
 		}),
 		new web3._extend.Method({
-			name: 'blackListInfo',
-			call: 'admin_blackListInfo',
+			name: 'srpListInfo',
+			call: 'admin_srpListInfo',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),

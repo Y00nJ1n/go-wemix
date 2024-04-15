@@ -239,7 +239,7 @@ var GovernanceDeployer = new function() {
         }
 
         // contacts, transactions to be deployed
-        var registry, envStorageImp, staking, stakingImp, ballotStorage, envStorage, govImp, gov
+        var registry, envStorageImp, staking, stakingImp, ballotStorage, ballotStorageImp, envStorage, govImp, gov
         var txs = new Array()
 
         // 1. deploy Registry and EnvStorageImp contracts
@@ -247,17 +247,19 @@ var GovernanceDeployer = new function() {
         registry = this.deployContract(Registry_data)
         envStorageImp = this.deployContract(EnvStorageImp_data)
         stakingImp = this.deployContract(StakingImp_data)
+        ballotStorageImp = this.deployContract(BallotStorageImp_data)
 
         this.log("Waiting for receipts...")
         envStorageImp = this.resolveContract(EnvStorageImp_contract.abi, envStorageImp)
         registry = this.resolveContract(Registry_contract.abi, registry)
         stakingImp = this.resolveContract(StakingImp_contract.abi, stakingImp);
+        ballotStorageImp = this.resolveContract(BallotStorageImp_contract.abi, ballotStorageImp);
 
         // 2. deploy Staking, BallotStorage, EnvStorage, GovImp, Gov
         this.log("Deploying Staking, BallotStorage, EnvStorage, GovImp & Gov...")
         var code = Staking_contract.getData(stakingImp.address, {data: Staking_data})
         staking = this.deployContract(code)
-        var code = BallotStorage_contract.getData(registry.address, {data: BallotStorage_data})
+        var code = BallotStorage_contract.getData(ballotStorageImp.address, {data: BallotStorage_data})
         ballotStorage = this.deployContract(code)
         code = EnvStorage_contract.getData(envStorageImp.address, {data: EnvStorage_data})
         envStorage = this.deployContract(code)
@@ -274,12 +276,16 @@ var GovernanceDeployer = new function() {
         ballotStorage = this.resolveContract(BallotStorage_contract.abi, ballotStorage)
         staking = this.resolveContract(Staking_contract.abi, staking)
 
-        // Add BlackList
-        // deploy BlackList
-        var blacklist
-        blacklist = this.deployContract(BlackList_data)
-        this.log("Waiting for gov contract...")
-        blacklist = this.resolveContract(BlackList_contract.abi, blacklist)
+        // Add SRP
+        // deploy SRP
+        var srplist,srplistImp
+        srplistImp = this.deployContract(SRPListImp_data)
+        this.log("Waiting for srplistImp contract receipts...")
+        srplistImp = this.resolveContract(SRPListImp_contract.abi, srplistImp)
+        code = Gov_contract.getData(srplistImp.address, { data: SRPList_data })
+        srplist = this.deployContract(code)
+        this.log("Waiting for srplist contract receipts...")
+        srplist = this.resolveContract(SRPList_contract.abi, srplist)
 
         // 3. setup registry
         this.log("Setting registry...")
@@ -296,10 +302,10 @@ var GovernanceDeployer = new function() {
         txs[txs.length] = this.sendTx(registry.address, null,
             registry.setContractDomain.getData(
                 "GovernanceContract", gov.address))
-        // Add BlackList
+        // Add SRP
         txs[txs.length] = this.sendTx(registry.address, null,
             registry.setContractDomain.getData(
-                "BlackList", blacklist.address))
+                "SRPList", srplist.address))
         if (initData.staker)
             txs[txs.length] = this.sendTx(registry.address, null,
                 registry.setContractDomain.getData(
@@ -370,6 +376,18 @@ var GovernanceDeployer = new function() {
         txs[txs.length] = this.sendTx(envStorage.address, null,
             tmpEnvStorageImp.initialize.getData(registry.address, envNames, envValues))
 
+        // 4.1 initialize ballotStorage:
+        this.log("Initializing ballotStorageImp ...")
+        var tmpballotStorageImp = web3.eth.contract(ballotStorageImp.abi).at(ballotStorage.address)
+        txs[txs.length] = this.sendTx(ballotStorage.address, null,
+            tmpballotStorageImp.initialize.getData(registry.address))
+
+        // 4.2 initialize srplist:
+        this.log("Initializing srplist ...")
+        var tmpsrplistImp = web3.eth.contract(srplistImp.abi).at(srplist.address)
+        txs[txs.length] = this.sendTx(srplist.address, null,
+            tmpsrplistImp.initialize.getData(registry.address))
+
         // 5. deposit staking
         var tmpStakingImp = web3.eth.contract(stakingImp.abi).at(staking.address)
         code = tmpStakingImp.init.getData(registry.address,
@@ -409,9 +427,11 @@ var GovernanceDeployer = new function() {
                  '  "STAKING_ADDRESS": "' + staking.address + '",\n' +
                  '  "ENV_STORAGE_ADDRESS": "' + envStorage.address + '",\n' +
                  '  "BALLOT_STORAGE_ADDRESS": "' + ballotStorage.address + '",\n' +
+                 '  "BALLOT_STORAGE_IMP_ADDRESS": "' + ballotStorageImp.address + '",\n' +
                  '  "GOV_ADDRESS": "' + gov.address + '",\n' +
                  '  "GOV_IMP_ADDRESS": "' + govImp.address + '"\n' +
-                 '  "BLACKLIST_ADDRESS": "' + blacklist.address + '"\n' +
+                 '  "SRPLIST_ADDRESS": "' + srplist.address + '"\n' +
+                 '  "SRPLIST_IMP_ADDRESS": "' + srplistImp.address + '"\n' +
                  '}')
 
         return true

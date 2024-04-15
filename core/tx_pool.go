@@ -96,8 +96,8 @@ var (
 var (
 	evictionInterval    = time.Minute     // Time interval to check for evictable transactions
 	statsReportInterval = 8 * time.Second // Time interval to report transaction pool stats
-	// Add BlackList
-	blacklistInterval = 3 * time.Hour // Time interval to check for blacklist transactions
+	// Add SRP
+	srplistInterval = 3 * time.Hour // Time interval to check for srplist transactions
 )
 
 var (
@@ -359,16 +359,16 @@ func (pool *TxPool) loop() {
 		report  = time.NewTicker(statsReportInterval)
 		evict   = time.NewTicker(evictionInterval)
 		journal = time.NewTicker(pool.config.Rejournal)
-		// Add BlackList
-		blacklist = time.NewTicker(blacklistInterval)
+		// Add SRP
+		srplist = time.NewTicker(srplistInterval)
 		// Track the previous head headers for transaction reorgs
 		head = pool.chain.CurrentBlock()
 	)
 	defer report.Stop()
 	defer evict.Stop()
 	defer journal.Stop()
-	// Add BlackList
-	defer blacklist.Stop()
+	// Add SRP
+	defer srplist.Stop()
 
 	// Notify tests that the init phase is done
 	close(pool.initDoneCh)
@@ -440,17 +440,17 @@ func (pool *TxPool) loop() {
 				}
 				pool.mu.Unlock()
 			}
-		// Add BlackList
-		case <-blacklist.C:
+		// Add SRP
+		case <-srplist.C:
 			if !wemixminer.IsPoW() {
-				blackListMap, _ := wemixminer.GetBlackListMap(pool.chain.CurrentBlock().Number())
-				if len(blackListMap) > 0 {
+				srpListMap, _, _ := wemixminer.GetSRPListMap(pool.chain.CurrentBlock().Number())
+				if len(srpListMap) > 0 {
 					pool.mu.Lock()
 					for addr := range pool.pending {
 						list := pool.pending[addr].Flatten()
 						for _, tx := range list {
-							if blackListMap[addr] || (tx.To() != nil && blackListMap[*tx.To()]) {
-								log.Debug("Discard pending transaction included in a blacklist", "hash", tx.Hash(), "address", addr)
+							if srpListMap[addr] {
+								log.Debug("Discard pending transaction included in a srplist", "hash", tx.Hash(), "addr", addr)
 								pool.removeTx(tx.Hash(), true)
 								pendingDiscardMeter.Mark(int64(1))
 							}
@@ -727,12 +727,12 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentState.GetNonce(from) > tx.Nonce() {
 		return ErrNonceTooLow
 	}
-	// Add BlackList
-	if wemixminer.AmPartner() {
-		blackListMap, _ := wemixminer.GetBlackListMap(pool.chain.CurrentBlock().Number())
-		if len(blackListMap) > 0 {
-			if blackListMap[from] || tx.To() != nil && blackListMap[*tx.To()] {
-				return ErrIncludedBlackList
+	// Add SRP
+	if !wemixminer.IsPoW() {
+		srpListMap, srpListSubscribe, _ := wemixminer.GetSRPListMap(pool.chain.CurrentBlock().Number())
+		if len(srpListMap) > 0 && srpListSubscribe {
+			if srpListMap[from] {
+				return ErrIncludedSRPList
 			}
 		}
 	}
@@ -1445,10 +1445,11 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 	// Track the promoted transactions to broadcast them at once
 	var promoted []*types.Transaction
 
-	// Add BlackList
-	var blackListMap map[common.Address]bool
-	if wemixminer.AmPartner() {
-		blackListMap, _ = wemixminer.GetBlackListMap(pool.chain.CurrentBlock().Number())
+	// Add SRP
+	var srpListMap map[common.Address]bool
+	var srpListSubscribe bool
+	if !wemixminer.IsPoW() {
+		srpListMap, srpListSubscribe, _ = wemixminer.GetSRPListMap(pool.chain.CurrentBlock().Number())
 	}
 
 	// Iterate over all accounts and promote any executable transactions
@@ -1467,12 +1468,12 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 		// Drop all transactions that are too costly (low balance or out of gas)
 		drops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
 
-		// Add BlackList
-		if wemixminer.AmPartner() {
-			if len(blackListMap) > 0 {
+		// Add SRP
+		if !wemixminer.IsPoW() {
+			if len(srpListMap) > 0 && srpListSubscribe {
 				for _, tx := range list.Flatten() {
-					if blackListMap[addr] || (tx.To() != nil && blackListMap[*tx.To()]) {
-						log.Trace("Removed queued transaction included in the blacklist", "hash", tx.Hash(), "addr", addr)
+					if srpListMap[addr] {
+						log.Trace("Removed queued transaction included in the srplist", "hash", tx.Hash(), "addr", addr)
 						list.Remove(tx)
 						drops = append(drops, tx)
 					}
@@ -1678,10 +1679,11 @@ func (pool *TxPool) truncateQueue() {
 // is always explicitly triggered by SetBaseFee and it would be unnecessary and wasteful
 // to trigger a re-heap is this function
 func (pool *TxPool) demoteUnexecutables() {
-	// Add BlackList
-	var blackListMap map[common.Address]bool
-	if wemixminer.AmPartner() {
-		blackListMap, _ = wemixminer.GetBlackListMap(pool.chain.CurrentBlock().Number())
+	// Add SRP
+	var srpListMap map[common.Address]bool
+	var srpListSubscribe bool
+	if !wemixminer.IsPoW() {
+		srpListMap, srpListSubscribe, _ = wemixminer.GetSRPListMap(pool.chain.CurrentBlock().Number())
 	}
 
 	// Iterate over all accounts and demote any non-executable transactions
@@ -1698,12 +1700,12 @@ func (pool *TxPool) demoteUnexecutables() {
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
 		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
 
-		// Add BlackList
-		if wemixminer.AmPartner() {
-			if len(blackListMap) > 0 {
+		// Add SRP
+		if !wemixminer.IsPoW() {
+			if len(srpListMap) > 0 && srpListSubscribe {
 				for _, tx := range list.Flatten() {
-					if blackListMap[addr] || (tx.To() != nil && blackListMap[*tx.To()]) {
-						log.Trace("Removed pending transaction included in the blacklist", "hash", tx.Hash(), "addr", addr)
+					if srpListMap[addr] {
+						log.Trace("Removed pending transaction included in the srplist", "hash", tx.Hash(), "addr", addr)
 						list.Remove(tx)
 						drops = append(drops, tx)
 					}
