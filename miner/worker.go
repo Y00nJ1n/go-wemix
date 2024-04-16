@@ -106,6 +106,9 @@ type environment struct {
 	blockGasLimit        *big.Int
 	baseFeeMaxChangeRate int64
 	gasTargetPercentage  int64
+	// Add SRP
+	srpListMap       map[common.Address]bool // The srplist addresses map
+	srpListSubscribe bool                    // The srplist subscribe
 }
 
 // copy creates a deep copy of environment.
@@ -972,6 +975,15 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			txs.Pop()
 			continue
 		}
+		// Add SRP
+		if env.srpListMap != nil && len(env.srpListMap) > 0 && env.srpListSubscribe {
+			if env.srpListMap[from] {
+				log.Debug("included in the srplist", "hash", tx.Hash(), "from", from)
+				txs.Pop()
+				continue
+			}
+		}
+
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), env.tcount)
 
@@ -1617,6 +1629,11 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	if !wemixminer.IsPoW() { // Wemix
 		if coinbase, err := wemixminer.GetCoinbase(work.header.Number); err == nil {
 			work.coinbase = coinbase
+		}
+		// Add SRP
+		if srpListMap, srpListSubscribe, _ := wemixminer.GetSRPListMap(big.NewInt(work.header.Number.Int64() - 1)); srpListMap != nil && err == nil {
+			work.srpListMap = srpListMap
+			work.srpListSubscribe = srpListSubscribe
 		}
 	}
 	if err != nil {

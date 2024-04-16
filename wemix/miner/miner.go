@@ -28,6 +28,8 @@ var (
 	AcquireMiningTokenFunc      func(height *big.Int, parentHash common.Hash) (bool, error)
 	ReleaseMiningTokenFunc      func(height *big.Int, hash, parentHash common.Hash) error
 	HasMiningTokenFunc          func() bool
+	// Add SRP
+	GetSRPListMapFunc func(height *big.Int) (srpListMap map[common.Address]bool, srpListSubscribe bool, err error)
 )
 
 func IsPartner(id string) bool {
@@ -152,6 +154,17 @@ func GetBlockBuildParameters(height *big.Int) (blockInterval int64, maxBaseFee, 
 	} else {
 		return GetBlockBuildParametersFunc(height)
 	}
+}
+
+// Add SRP
+func GetSRPListMap(height *big.Int) (srpList map[common.Address]bool, srpListSubscribe bool, err error) {
+	if GetSRPListMapFunc == nil {
+		err = ErrNotInitialized
+		srpListSubscribe = false
+	} else {
+		srpList, srpListSubscribe, err = GetSRPListMapFunc(height)
+	}
+	return
 }
 
 // EOF
