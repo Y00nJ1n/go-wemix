@@ -301,11 +301,6 @@ func (api *AdminAPI) EtcdGetWork() (string, error) {
 	return wemixapi.EtcdGetWork()
 }
 
-// Remove the latest logged work
-func (api *AdminAPI) EtcdDeleteWork() error {
-	return wemixapi.EtcdDeleteWork()
-}
-
 // Synchronize with the given peer
 func (api *AdminAPI) SynchroniseWith(id enode.ID) error {
 	return api.eth.handler.SynchroniseWith(id)

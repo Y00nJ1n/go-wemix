@@ -270,16 +270,6 @@ func syncCheck() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// check token string
-	if tokenData, err := admin.etcdGet(wemixTokenKey); err == nil {
-		var token = &WemixToken{}
-		if err = json.Unmarshal([]byte(tokenData), token); err != nil {
-			// invalid token string
-			err = admin.etcdDelete(wemixTokenKey)
-			log.Error("sync check: reset the invalid token", "token", tokenData, "error", err)
-		}
-	}
-
 	header, err := admin.cli.HeaderByNumber(ctx, nil)
 	if err != nil {
 		log.Error("sync check: failed to get the latest block", "error", err)
@@ -340,7 +330,7 @@ func syncCheck() error {
 
 	// collects mining peers' latest blocks
 	nodes := admin.getNodes()
-	states := getMiners("", 5000)
+	states := getMiners("", 5)
 	if len(nodes) == 0 && len(nodes) != len(states) {
 		// cached governance must be out-of-date
 		log.Error("sync check: node count mismatch, aborting")
