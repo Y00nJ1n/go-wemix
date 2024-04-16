@@ -352,6 +352,39 @@ func (ma *wemixAdmin) electNextMiner(height *big.Int) error {
 	return nil
 }
 
+func getFinalizedBlockNumber(height *big.Int) (*big.Int, error) {
+	prev := new(big.Int).Sub(height, common.Big1)
+	if admin == nil {
+		return prev, wemixminer.ErrNotInitialized
+	}
+	var (
+		ctx context.Context
+		gov *metclient.RemoteContract
+		err error
+	)
+	ctx = context.Background()
+	if _, gov, _, _, err = admin.getRegGovEnvContracts(ctx, prev); err != nil {
+		return prev, wemixminer.ErrNotInitialized
+	}
+	e, err := getCoinbaseEnodeCache(ctx, prev, gov)
+	if err != nil {
+		return prev, err
+	}
+	// if count <= 2, not enforced
+	if len(e.nodes) <= 2 {
+		return prev, nil
+	}
+	// with the max compromised node count to be less than n / 2,
+	// max finality is n / 2 + 1
+	finality := len(e.nodes)/2 + 1
+	finalizedBlockNumber := new(big.Int).Set(height)
+	finalizedBlockNumber.Sub(finalizedBlockNumber, big.NewInt(int64(finality)))
+	if finalizedBlockNumber.Cmp(big0) < 0 {
+		finalizedBlockNumber = big0
+	}
+	return finalizedBlockNumber, nil
+}
+
 func refreshCoinbaseEnodeCache(height *big.Int) {
 	_, _ = admin.nextMinerCandidates(height)
 }
