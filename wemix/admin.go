@@ -121,6 +121,18 @@ type rewardParameters struct {
 	blocksPer                                    int64
 }
 
+type halvingReward struct {
+	count  uint8
+	reward *big.Int
+}
+
+type halvingConfig struct {
+	halvingMaxCount      uint64
+	halvingBlockInterval *big.Int
+	halvingLastBlock     *big.Int
+	briocheBlock         *big.Int
+}
+
 var (
 	// "Wemix Registry"
 	magic, _        = big.NewInt(0).SetString("0x57656d6978205265676973747279", 0)
@@ -151,6 +163,32 @@ var (
 		{ "addr": "0x6f488615e6b462ce8909e9cd34c3f103994ab2fb", "reward": 100000000000000000 },
 		{ "addr": "0x6bd26c4a45e7d7cac2a389142f99f12e5713d719", "reward": 250000000000000000 },
 		{ "addr": "0x816e30b6c314ba5d1a67b1b54be944ce4554ed87", "reward": 306213253695614752 }]`
+
+	wemixHalvingReward = []halvingReward{
+		{0, big.NewInt(0)},
+		{1, big.NewInt(500000000000000000)},
+		{2, big.NewInt(250000000000000000)},
+		{3, big.NewInt(125000000000000000)},
+		{4, big.NewInt(62500000000000000)},
+		{5, big.NewInt(31250000000000000)},
+		{6, big.NewInt(15625000000000000)},
+		{7, big.NewInt(7812500000000000)},
+		{8, big.NewInt(3906250000000000)},
+		{9, big.NewInt(1953125000000000)},
+		{10, big.NewInt(976562500000000)},
+		{11, big.NewInt(488281250000000)},
+		{12, big.NewInt(244140625000000)},
+		{13, big.NewInt(122070312500000)},
+		{14, big.NewInt(61035156250000)},
+		{15, big.NewInt(30517578125000)},
+		{16, big.NewInt(15258789062500)},
+	}
+
+	wemixHalvingConfig = &halvingConfig{
+		halvingMaxCount:      uint64(len(wemixHalvingReward) - 1),
+		halvingBlockInterval: big.NewInt(63115200),    // The number of blocks created during one halving.
+		halvingLastBlock:     big.NewInt(87142410498), // The number of blocks at which minting ends.
+	}
 )
 
 func (n *wemixNode) eq(m *wemixNode) bool {
@@ -723,12 +761,20 @@ func (ma *wemixAdmin) getGovData(refresh bool) (data *govdata, err error) {
 	return
 }
 
-func StartAdmin(stack *node.Node, datadir string) {
+func StartAdmin(stack *node.Node, datadir string, briocheBlock *big.Int) {
 	if !(params.ConsensusMethod == params.ConsensusPoA ||
 		params.ConsensusMethod == params.ConsensusETCD ||
 		params.ConsensusMethod == params.ConsensusPBFT) {
 		utils.Fatalf("Invalid Consensus Method: %d\n", params.ConsensusMethod)
 	}
+
+	// init wemixHalvingConfig.briocheBlock
+	if briocheBlock == nil {
+		wemixHalvingConfig.briocheBlock = nil
+	} else {
+		wemixHalvingConfig.briocheBlock = new(big.Int).Set(briocheBlock)
+	}
+	log.Info("init wemixHalvingConfig", "briocheBlock", wemixHalvingConfig.briocheBlock)
 
 	rpcCli, err := stack.Attach()
 	if err != nil {
@@ -1146,7 +1192,7 @@ func distributeRewards(height *big.Int, rp *rewardParameters, fees *big.Int) ([]
 	return rewards, nil
 }
 
-func (ma *wemixAdmin) calculateRewards(num, blockReward, fees *big.Int, addBalance func(common.Address, *big.Int)) (coinbase *common.Address, rewards []byte, err error) {
+func (ma *wemixAdmin) calculateRewards(isBrioche bool, num, blockReward, fees *big.Int, addBalance func(common.Address, *big.Int)) (coinbase *common.Address, rewards []byte, err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1179,6 +1225,11 @@ func (ma *wemixAdmin) calculateRewards(num, blockReward, fees *big.Int, addBalan
 		coinbase.SetBytes(rp.members[mix].Reward.Bytes())
 	}
 
+	if isBrioche {
+		// reflect halving configuration to rp.
+		usedHalving(num, rp, wemixHalvingConfig)
+	}
+
 	rr, errr := distributeRewards(num, rp, fees)
 	if errr != nil {
 		err = errr
@@ -1195,8 +1246,8 @@ func (ma *wemixAdmin) calculateRewards(num, blockReward, fees *big.Int, addBalan
 	return
 }
 
-func calculateRewards(num, blockReward, fees *big.Int, addBalance func(common.Address, *big.Int)) (*common.Address, []byte, error) {
-	return admin.calculateRewards(num, blockReward, fees, addBalance)
+func calculateRewards(isBrochio bool, num, blockReward, fees *big.Int, addBalance func(common.Address, *big.Int)) (*common.Address, []byte, error) {
+	return admin.calculateRewards(isBrochio, num, blockReward, fees, addBalance)
 }
 
 func verifyRewards(num *big.Int, rewards string) error {
@@ -1810,6 +1861,83 @@ func verifyBlockRewards(height *big.Int) interface{} {
 	return r
 }
 
+func usedHalving(number *big.Int, rp *rewardParameters, wemixHalving *halvingConfig) {
+	if wemixHalving.briocheBlock == nil || wemixHalving.briocheBlock.Cmp(number) > 0 {
+		return
+	}
+
+	halvingCount := big.NewInt(number.Int64())
+	halvingCount.Sub(halvingCount, wemixHalving.briocheBlock)
+	halvingCount.Div(halvingCount, wemixHalving.halvingBlockInterval).Add(halvingCount, common.Big1)
+	if halvingCount.Uint64() > wemixHalving.halvingMaxCount {
+		if wemixHalving.halvingLastBlock.Cmp(number) > 0 {
+			halvingCount.SetUint64(wemixHalving.halvingMaxCount)
+		} else {
+			halvingCount.SetUint64(0)
+		}
+	}
+	rp.rewardAmount = new(big.Int).Set(wemixHalvingReward[halvingCount.Uint64()].reward)
+	if halvingCount.Uint64() == 0 {
+		log.Debug("Halving", "halving end reward", rp.rewardAmount)
+	} else {
+		log.Debug("Halving", "order", halvingCount, "reward", rp.rewardAmount)
+	}
+}
+
+func WemixHalvingInfo() interface{} {
+	if admin == nil || wemixHalvingConfig.briocheBlock == nil {
+		return nil
+	} else {
+		blockNumber := new(big.Int).SetUint64(uint64(admin.lastBlock))
+		if blockNumber.Cmp(wemixHalvingConfig.briocheBlock) < 0 {
+			halvingInfo := map[string]interface{}{
+				"blockNumber":                     blockNumber,
+				"halvingStartBlock(briocheBlock)": wemixHalvingConfig.briocheBlock,
+				"halvingMaxCount":                 wemixHalvingConfig.halvingMaxCount,
+				"halvingBlockInterval":            wemixHalvingConfig.halvingBlockInterval,
+				"halvingLastBlock":                wemixHalvingConfig.halvingLastBlock,
+				"currentHalvingReward":            nil,
+			}
+			return halvingInfo
+		} else {
+			var currentHalvingReward map[string]interface{}
+			halvingCount := new(big.Int).Set(blockNumber)
+			halvingCount.Sub(halvingCount, wemixHalvingConfig.briocheBlock)
+			halvingCount.Div(halvingCount, wemixHalvingConfig.halvingBlockInterval).Add(halvingCount, common.Big1)
+
+			if halvingCount.Uint64() > wemixHalvingConfig.halvingMaxCount {
+				if wemixHalvingConfig.halvingLastBlock.Cmp(blockNumber) > 0 {
+					halvingCount.SetUint64(wemixHalvingConfig.halvingMaxCount)
+					currentHalvingReward = map[string]interface{}{
+						"count":  halvingCount,
+						"reward": wemixHalvingReward[halvingCount.Uint64()].reward,
+					}
+				} else {
+					halvingCount.SetUint64(0)
+					currentHalvingReward = map[string]interface{}{
+						"count":  "end of halving",
+						"reward": wemixHalvingReward[halvingCount.Uint64()].reward,
+					}
+				}
+			} else {
+				currentHalvingReward = map[string]interface{}{
+					"order":  wemixHalvingReward[halvingCount.Uint64()].count,
+					"reward": wemixHalvingReward[halvingCount.Uint64()].reward,
+				}
+			}
+			halvingInfo := map[string]interface{}{
+				"blockNumber":                      blockNumber,
+				"halvingStartBlock(=briocheBlock)": wemixHalvingConfig.briocheBlock,
+				"halvingMaxCount":                  wemixHalvingConfig.halvingMaxCount,
+				"halvingBlockInterval":             wemixHalvingConfig.halvingBlockInterval,
+				"halvingLastBlock":                 wemixHalvingConfig.halvingLastBlock,
+				"currentHalvingReward":             currentHalvingReward,
+			}
+			return halvingInfo
+		}
+	}
+}
+
 func init() {
 	wemixminer.AmPartnerFunc = AmPartner
 	wemixminer.IsPartnerFunc = IsPartner
@@ -1838,6 +1966,7 @@ func init() {
 	wemixapi.EtcdGetWork = EtcdGetWork
 	wemixapi.EtcdGet = EtcdGet
 	wemixapi.EtcdPut = EtcdPut
+	wemixapi.WemixHalvingInfo = WemixHalvingInfo
 
 	// handle testnet block 94 rewards
 	if err := json.Unmarshal([]byte(testnetBlock94RewardsString), &testnetBlock94Rewards); err != nil {

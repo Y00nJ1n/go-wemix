@@ -1704,7 +1704,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 			if retryCount--; !wemixminer.IsPoW() && retryCount > 0 {
 				// make sure the previous block exists in order to calculate rewards distribution
 				for try := 100; try > 0; try-- {
-					if _, _, err := wemixminer.CalculateRewards(block.Number(), big.NewInt(0), big.NewInt(100000000), nil); err == nil {
+					if _, _, err := wemixminer.CalculateRewards(false, block.Number(), big.NewInt(0), big.NewInt(100000000), nil); err == nil {
 						break
 					}
 					time.Sleep(100 * time.Millisecond)

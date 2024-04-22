@@ -49,6 +49,8 @@ var (
 	// for debugging
 	EtcdPut func(string, string) error
 	EtcdGet func(string) (string, error)
+
+	WemixHalvingInfo func() interface{}
 )
 
 func (s *WemixMinerStatus) Clone() *WemixMinerStatus {

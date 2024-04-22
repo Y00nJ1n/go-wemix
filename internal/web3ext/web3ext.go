@@ -262,6 +262,10 @@ web3._extend({
 			name: 'wemixInfo',
 			getter: 'admin_wemixInfo'
 		}),
+		new web3._extend.Property({
+			name: 'wemixHalvingInfo',
+			getter: 'admin_wemixHalvingInfo'
+		}),
 	]
 });
 `
