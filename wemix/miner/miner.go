@@ -20,12 +20,12 @@ var (
 	VerifyRewardsFunc           func(*big.Int, string) error
 	GetCoinbaseFunc             func(height *big.Int) (coinbase common.Address, err error)
 	SignBlockFunc               func(height *big.Int, hash common.Hash) (coinbase common.Address, sig []byte, err error)
-	VerifyBlockSigFunc          func(height *big.Int, coinbase common.Address, nodeId []byte, hash common.Hash, sig []byte, checkMinerLimit bool) bool
+	VerifyBlockSigFunc          func(isBrioche bool, height *big.Int, coinbase common.Address, nodeId []byte, hash common.Hash, sig []byte, checkMinerLimit bool) bool
 	RequirePendingTxsFunc       func() bool
 	VerifyBlockRewardsFunc      func(height *big.Int) interface{}
 	SuggestGasPriceFunc         func() *big.Int
 	GetBlockBuildParametersFunc func(height *big.Int) (blockInterval int64, maxBaseFee, gasLimit *big.Int, baseFeeMaxChangeRate, gasTargetPercentage int64, err error)
-	AcquireMiningTokenFunc      func(height *big.Int, parentHash common.Hash) (bool, error)
+	AcquireMiningTokenFunc      func(isBrioche bool, height *big.Int, parentHash common.Hash) (bool, error)
 	ReleaseMiningTokenFunc      func(height *big.Int, hash, parentHash common.Hash) error
 	HasMiningTokenFunc          func() bool
 	GetFinalizedBlockNumberFunc func(height *big.Int) (*big.Int, error)
@@ -55,11 +55,11 @@ func AmHub(id string) int {
 	}
 }
 
-func AcquireMiningToken(height *big.Int, parentHash common.Hash) (bool, error) {
+func AcquireMiningToken(isBrioche bool, height *big.Int, parentHash common.Hash) (bool, error) {
 	if AcquireMiningTokenFunc == nil {
 		return false, ErrNotInitialized
 	}
-	return AcquireMiningTokenFunc(height, parentHash)
+	return AcquireMiningTokenFunc(isBrioche, height, parentHash)
 }
 
 func ReleaseMiningToken(height *big.Int, hash, parentHash common.Hash) error {
@@ -114,11 +114,11 @@ func SignBlock(height *big.Int, hash common.Hash) (coinbase common.Address, sig 
 	return
 }
 
-func VerifyBlockSig(height *big.Int, coinbase common.Address, nodeId []byte, hash common.Hash, sig []byte, checkMinerLimit bool) bool {
+func VerifyBlockSig(isBrioche bool, height *big.Int, coinbase common.Address, nodeId []byte, hash common.Hash, sig []byte, checkMinerLimit bool) bool {
 	if VerifyBlockSigFunc == nil {
 		return false
 	} else {
-		return VerifyBlockSigFunc(height, coinbase, nodeId, hash, sig, checkMinerLimit)
+		return VerifyBlockSigFunc(isBrioche, height, coinbase, nodeId, hash, sig, checkMinerLimit)
 	}
 }
 

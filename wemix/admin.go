@@ -1318,7 +1318,7 @@ func signBlock(height *big.Int, hash common.Hash) (coinbase common.Address, sig 
 	return
 }
 
-func verifyBlockSig(height *big.Int, coinbase common.Address, nodeId []byte, hash common.Hash, sig []byte, checkMinerLimit bool) bool {
+func verifyBlockSig(isBrioche bool, height *big.Int, coinbase common.Address, nodeId []byte, hash common.Hash, sig []byte, checkMinerLimit bool) bool {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1354,7 +1354,7 @@ func verifyBlockSig(height *big.Int, coinbase common.Address, nodeId []byte, has
 	if !checkMinerLimit {
 		return true
 	}
-	ok, err := admin.verifyMinerLimit(ctx, height, gov, &coinbase, nodeId)
+	ok, err := admin.verifyMinerLimit(ctx, isBrioche, height, gov, &coinbase, nodeId)
 	return err == nil && ok
 }
 
