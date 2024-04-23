@@ -1228,6 +1228,8 @@ func (ma *wemixAdmin) calculateRewards(isBrioche bool, num, blockReward, fees *b
 	if isBrioche {
 		// reflect halving configuration to rp.
 		usedHalving(num, rp, wemixHalvingConfig)
+		// reflect cubing configuration to rp.
+		usedCubing(rp)
 	}
 
 	rr, errr := distributeRewards(num, rp, fees)
@@ -1859,6 +1861,21 @@ func verifyBlockRewards(height *big.Int) interface{} {
 	}
 
 	return r
+}
+
+func usedCubing(rp *rewardParameters) {
+	//Cubing reflected in stake of member.
+	for i := 0; i < len(rp.members); i++ {
+		stake := new(big.Int).Set(rp.members[i].Stake)
+		// expStake = stake^3
+		expStake := new(big.Int).Set(stake)
+		expStake.Mul(expStake, stake).Mul(expStake, stake)
+		// cubingStake = expStake^0.5( = stake^1.5 )
+		expFloatStake := new(big.Float).SetInt(expStake)
+		sqrtExpFloatStake := new(big.Float).Sqrt(expFloatStake)
+		sqrtExpFloatStake.Int(rp.members[i].Stake)
+		log.Debug("Cubing", "addr", rp.members[i].Reward, "cubing stake", rp.members[i].Stake)
+	}
 }
 
 func usedHalving(number *big.Int, rp *rewardParameters, wemixHalving *halvingConfig) {

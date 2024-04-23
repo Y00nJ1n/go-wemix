@@ -143,8 +143,8 @@ func TestDistributeRewards(t *testing.T) {
 	}
 }
 
-// TestHalvingRewards tests the usedHalving and distributeRewards function
-func TestHalvingRewards(t *testing.T) {
+// TestHalvingCubingRewards tests the usedHalving,usedCubing and distributeRewards function
+func TestHalvingCubingRewards(t *testing.T) {
 	hexToAddressPtr := func(addr string) *common.Address {
 		address := common.HexToAddress(addr)
 		return &address
@@ -231,7 +231,7 @@ func TestHalvingRewards(t *testing.T) {
 				halvingLastBlock:     big.NewInt(4000),
 				briocheBlock:         big.NewInt(100),
 			},
-			want: `[{"addr":"0x4444444444444444444444444444444444444444","reward":166666666666666667},{"addr":"0x5555555555555555555555555555555555555555","reward":83333333333333333},{"addr":"0x1111111111111111111111111111111111111111","reward":150000000000000000},{"addr":"0x2222222222222222222222222222222222222222","reward":100000000000000000},{"addr":"0x3333333333333333333333333333333333333333","reward":100}]`,
+			want: `[{"addr":"0x4444444444444444444444444444444444444444","reward":184699313116209523},{"addr":"0x5555555555555555555555555555555555555555","reward":65300686883790477},{"addr":"0x1111111111111111111111111111111111111111","reward":150000000000000000},{"addr":"0x2222222222222222222222222222222222222222","reward":100000000000000000},{"addr":"0x3333333333333333333333333333333333333333","reward":100}]`,
 		},
 		{
 			name:   "halving count=2",
@@ -274,7 +274,7 @@ func TestHalvingRewards(t *testing.T) {
 				halvingLastBlock:     big.NewInt(4000),
 				briocheBlock:         big.NewInt(100),
 			},
-			want: `[{"addr":"0x02b4b2d83786c8ee315db2ddac704794850d2149","reward":47927150730889048},{"addr":"0xb16d2494fddfa4c000deaf642d47673e5ca74e07","reward":26359932901988976},{"addr":"0x452893ed818c0e3ea6f415aeab8ef08778087fc6","reward":22765396597172299},{"addr":"0xf4404494ab647d29a62c57118c3a739c521fa004","reward":2947519769949677},{"addr":"0x6f488615e6b462ce8909e9cd34c3f103994ab2fb","reward":25000000000000000},{"addr":"0x6bd26c4a45e7d7cac2a389142f99f12e5713d719","reward":62500000000000000},{"addr":"0x816e30b6c314ba5d1a67b1b54be944ce4554ed87","reward":62500000000000000}]`,
+			want: `[{"addr":"0x02b4b2d83786c8ee315db2ddac704794850d2149","reward":57126092146969110},{"addr":"0xb16d2494fddfa4c000deaf642d47673e5ca74e07","reward":23301214098472185},{"addr":"0x452893ed818c0e3ea6f415aeab8ef08778087fc6","reward":18701434930292739},{"addr":"0xf4404494ab647d29a62c57118c3a739c521fa004","reward":871258824265966},{"addr":"0x6f488615e6b462ce8909e9cd34c3f103994ab2fb","reward":25000000000000000},{"addr":"0x6bd26c4a45e7d7cac2a389142f99f12e5713d719","reward":62500000000000000},{"addr":"0x816e30b6c314ba5d1a67b1b54be944ce4554ed87","reward":62500000000000000}]`,
 		},
 		{
 			name:   "halving count=16",
@@ -312,7 +312,7 @@ func TestHalvingRewards(t *testing.T) {
 				briocheBlock:         big.NewInt(100),
 			},
 			fees: hexToBigInt("0xadc5e885b956557f"),
-			want: `[{"addr":"0x02b4b2d83786c8ee315db2ddac704794850d2149","reward":3014081790124},{"addr":"0xb16d2494fddfa4c000deaf642d47673e5ca74e07","reward":1657744984568},{"addr":"0x452893ed818c0e3ea6f415aeab8ef08778087fc6","reward":1431688850308},{"addr":"0xf5ed7476157980e831516cdd5493f5334a35b23e","reward":1525878906250},{"addr":"0x6bd26c4a45e7d7cac2a389142f99f12e5713d719","reward":3814697265625},{"addr":"0x816e30b6c314ba5d1a67b1b54be944ce4554ed87","reward":3814697265625},{"addr":"0x6f488615e6b462ce8909e9cd34c3f103994ab2fb","reward":12521670000011269503}]`,
+			want: `[{"addr":"0x02b4b2d83786c8ee315db2ddac704794850d2149","reward":3517345140055},{"addr":"0xb16d2494fddfa4c000deaf642d47673e5ca74e07","reward":1434693133845},{"addr":"0x452893ed818c0e3ea6f415aeab8ef08778087fc6","reward":1151477351100},{"addr":"0xf5ed7476157980e831516cdd5493f5334a35b23e","reward":1525878906250},{"addr":"0x6bd26c4a45e7d7cac2a389142f99f12e5713d719","reward":3814697265625},{"addr":"0x816e30b6c314ba5d1a67b1b54be944ce4554ed87","reward":3814697265625},{"addr":"0x6f488615e6b462ce8909e9cd34c3f103994ab2fb","reward":12521670000011269503}]`,
 		},
 		{
 			name:   "halving count=end",
@@ -357,6 +357,7 @@ func TestHalvingRewards(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			usedHalving(tt.height, tt.rp, tt.halving)
+			usedCubing(tt.rp)
 			// Call the distributeRewards function
 			rewards, err := distributeRewards(tt.height, tt.rp, tt.fees)
 			rewardsString, _ := json.Marshal(rewards)
