@@ -322,6 +322,12 @@ func (api *adminAPI) Datadir() string {
 	return api.node.DataDir()
 }
 
+// Add SRP
+// SrpListInfo retrieves the information about Wemix
+func (api *adminAPI) SrpListInfo(height rpc.BlockNumber) interface{} {
+	return wemixapi.SRPListInfo(height)
+}
+
 // WemixInfo retrieves the information about Wemix
 func (api *adminAPI) WemixInfo() interface{} {
 	return wemixapi.Info()

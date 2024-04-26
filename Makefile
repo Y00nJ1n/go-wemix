@@ -173,6 +173,16 @@ BEGIN { print "package wemix\n"; }					     \
   sub("^var[^(]*\\(","",$$0); sub("\\);$$","",$$0);			     \
   n = "Gov";								     \
   print "var " n "Abi = `{ \"contractName\": \"" n "\", \"abi\": " $$0 "}`"; \
+}									     \
+/^var BallotStorageImp_contract/ {							     \
+  sub("^var[^(]*\\(","",$$0); sub("\\);$$","",$$0);			     \
+  n = "BallotStorage";								     \
+  print "var " n "Abi = `{ \"contractName\": \"" n "\", \"abi\": " $$0 "}`"; \
+}									     \
+/^var SRPListImp_contract/ {							     \
+  sub("^var[^(]*\\(","",$$0); sub("\\);$$","",$$0);			     \
+  n = "SRPList";								     \
+  print "var " n "Abi = `{ \"contractName\": \"" n "\", \"abi\": " $$0 "}`"; \
 }'
 
 wemix/governance_abi.go: wemix/contracts/WemixGovernance.js

@@ -65,9 +65,11 @@ type wemixAdmin struct {
 	gov         *metclient.RemoteContract
 	staking     *metclient.RemoteContract
 	envStorage  *metclient.RemoteContract
-	Updates     chan bool
-	rpcCli      *rpc.Client
-	cli         *ethclient.Client
+	// Add SRP
+	srpList *metclient.RemoteContract
+	Updates chan bool
+	rpcCli  *rpc.Client
+	cli     *ethclient.Client
 
 	etcd        *embed.Etcd
 	etcdCli     *clientv3.Client
@@ -121,6 +123,16 @@ type rewardParameters struct {
 	blocksPer                                    int64
 }
 
+// Add SRP
+// srpList parameters
+type srpListParameters struct {
+	updatedBlock  *big.Int
+	srpListLength *big.Int
+	srpList       []common.Address
+	srpListMap    map[common.Address]bool
+	subscribe     bool
+}
+
 type halvingReward struct {
 	count  uint8
 	reward *big.Int
@@ -163,6 +175,10 @@ var (
 		{ "addr": "0x6f488615e6b462ce8909e9cd34c3f103994ab2fb", "reward": 100000000000000000 },
 		{ "addr": "0x6bd26c4a45e7d7cac2a389142f99f12e5713d719", "reward": 250000000000000000 },
 		{ "addr": "0x816e30b6c314ba5d1a67b1b54be944ce4554ed87", "reward": 306213253695614752 }]`
+
+	// Add SRP
+	// sync.Map[int]*srpListParameters
+	srpListCache = &sync.Map{}
 
 	wemixHalvingReward = []halvingReward{
 		{0, big.NewInt(0)},
@@ -494,6 +510,291 @@ func (ma *wemixAdmin) getWemixNodes(ctx context.Context, block *big.Int) ([]*wem
 	return nodes, err
 }
 
+// Add SRP
+func (ma *wemixAdmin) getSRPListGovContracts(ctx context.Context, height *big.Int) (srpList *metclient.RemoteContract, gov *metclient.RemoteContract, err error) {
+	if admin == nil || ma.registry == nil {
+		err = wemixminer.ErrNotInitialized
+		return
+	}
+	reg := &metclient.RemoteContract{
+		Cli: ma.cli,
+		Abi: ma.registry.Abi,
+	}
+	gov = &metclient.RemoteContract{
+		Cli: ma.cli,
+		Abi: ma.gov.Abi,
+	}
+	srpList = &metclient.RemoteContract{
+		Cli: ma.cli,
+		Abi: ma.srpList.Abi,
+	}
+	if ma.registry.To != nil {
+		reg.To = ma.registry.To
+	} else {
+		var addr *common.Address
+		if addr, err = ma.getRegistryAddress(ctx, ma.cli, reg.Abi, height); err != nil {
+			err = wemixminer.ErrNotInitialized
+			return
+		}
+		reg.To = addr
+	}
+
+	var addr common.Address
+	input := []interface{}{metclient.ToBytes32("SRPList")}
+	if err = metclient.CallContract(ctx, reg, "getContractAddress", input, &addr, height); err != nil {
+		err = errors.New("SRPList not initialized")
+		return
+	}
+
+	srpList.To = &common.Address{}
+	srpList.To.SetBytes(addr.Bytes())
+	ma.srpList.To = srpList.To
+
+	input = []interface{}{metclient.ToBytes32("GovernanceContract")}
+	if err = metclient.CallContract(ctx, reg, "getContractAddress", input, &addr, height); err != nil {
+		err = errors.New("gov not initialized")
+		return
+	}
+
+	gov.To = &common.Address{}
+	gov.To.SetBytes(addr.Bytes())
+
+	return
+}
+
+// Add SRP
+func (ma *wemixAdmin) getSRPListInfo(height *big.Int) (*srpListParameters, error) {
+	var (
+		nodes           []*wemixNode
+		addr            common.Address
+		name, enode, ip []byte
+		port            *big.Int
+		nodeLength      int64
+		input, output   []interface{}
+		modifiedBlock   *big.Int
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	srpListParam := &srpListParameters{}
+	srp, gov, err := ma.getSRPListGovContracts(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = metclient.CallContract(ctx, gov, "modifiedBlock", nil, &modifiedBlock, height); err != nil {
+		return nil, err
+	} else if modifiedBlock.Int64() == 0 {
+		return nil, wemixminer.ErrNotInitialized
+	}
+
+	//if found in cache, use it
+	if e, ok := coinbaseEnodeCache.Load(modifiedBlock.Int64()); ok {
+		nodes = e.(*coinbaseEnodeEntry).nodes
+	} else {
+		nodeLength, err = ma.getInt(ctx, gov, height, "getNodeLength")
+		if err != nil {
+			return nil, err
+		}
+		for i := int64(1); i <= nodeLength; i++ {
+			input = []interface{}{big.NewInt(i)}
+			output = []interface{}{&name, &enode, &ip, &port}
+			if err = metclient.CallContract(ctx, gov, "getNode", input, &output, height); err != nil {
+				return nil, err
+			}
+
+			if err = metclient.CallContract(ctx, gov, "getMember", input, &addr, height); err != nil {
+				return nil, err
+			}
+
+			sid := hex.EncodeToString(enode)
+			if len(sid) != 128 {
+				return nil, ErrInvalidEnode
+			}
+			idv4, _ := toIdv4(sid)
+			nodes = append(nodes, &wemixNode{
+				Name:  string(name),
+				Enode: sid,
+				Ip:    string(ip),
+				Id:    idv4,
+				Port:  int(port.Int64()),
+			})
+		}
+	}
+
+	if ma.self != nil {
+		for _, i := range nodes {
+			if i.Id == ma.self.Id {
+				log.Debug("SRP self", "i.Name", i.Name, "ma.self.Addr", ma.self.Addr)
+				input = []interface{}{ma.self.Addr}
+				if err = metclient.CallContract(ctx, srp, "isAddressInSubscriptionList", input, &srpListParam.subscribe, height); err != nil {
+					srpListParam.subscribe = false
+				}
+				break
+			}
+		}
+	}
+	// no coinbaseEnodeEntry caching
+
+	if err = metclient.CallContract(ctx, srp, "getUpdatedBlock", nil, &srpListParam.updatedBlock, height); err != nil {
+		return nil, err
+	}
+
+	// if found in cache, use it
+	if srpListCacheTemp, ok := srpListCache.Load(srpListParam.updatedBlock.Int64()); ok {
+		if ma.self != nil && srpListParam.subscribe != srpListCacheTemp.(*srpListParameters).subscribe {
+			// change subscribe status
+			srpListCacheTemp.(*srpListParameters).subscribe = srpListParam.subscribe
+		}
+		return srpListCacheTemp.(*srpListParameters), nil
+	}
+
+	if err = metclient.CallContract(ctx, srp, "getSRPListLength", nil, &srpListParam.srpListLength, height); err != nil {
+		return nil, err
+	}
+
+	srpListParam.srpList = make([]common.Address, srpListParam.srpListLength.Uint64())
+	if err = metclient.CallContract(ctx, srp, "getSRPList", nil, &srpListParam.srpList, height); err != nil {
+		return nil, err
+	}
+
+	if err != nil {
+		err = wemixminer.ErrNotInitialized
+		return nil, err
+	}
+
+	srpListMap := make(map[common.Address]bool, srpListParam.srpListLength.Uint64())
+	for _, addr = range srpListParam.srpList {
+		srpListMap[addr] = true
+	}
+	srpListParam.srpListMap = srpListMap
+
+	// no srpListMap caching
+
+	return srpListParam, nil
+}
+
+func (ma *wemixAdmin) getSRPListWithCache(height *big.Int) (*srpListParameters, error) {
+	var (
+		nodes           []*wemixNode
+		addr            common.Address
+		name, enode, ip []byte
+		port            *big.Int
+		nodeLength      int64
+		input, output   []interface{}
+		modifiedBlock   *big.Int
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	srpListParam := &srpListParameters{}
+	srp, gov, err := ma.getSRPListGovContracts(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = metclient.CallContract(ctx, gov, "modifiedBlock", nil, &modifiedBlock, height); err != nil {
+		return nil, err
+	} else if modifiedBlock.Int64() == 0 {
+		return nil, wemixminer.ErrNotInitialized
+	}
+	// if found in cache, use it
+	if e, ok := coinbaseEnodeCache.Load(modifiedBlock.Int64()); ok {
+		nodes = e.(*coinbaseEnodeEntry).nodes
+	} else {
+		nodeLength, err = ma.getInt(ctx, gov, height, "getNodeLength")
+		if err != nil {
+			return nil, err
+		}
+		for i := int64(1); i <= nodeLength; i++ {
+			input = []interface{}{big.NewInt(i)}
+			output = []interface{}{&name, &enode, &ip, &port}
+			if err = metclient.CallContract(ctx, gov, "getNode", input, &output, height); err != nil {
+				return nil, err
+			}
+
+			if err = metclient.CallContract(ctx, gov, "getMember", input, &addr, height); err != nil {
+				return nil, err
+			}
+
+			sid := hex.EncodeToString(enode)
+			if len(sid) != 128 {
+				return nil, ErrInvalidEnode
+			}
+			idv4, _ := toIdv4(sid)
+			nodes = append(nodes, &wemixNode{
+				Name:  string(name),
+				Enode: sid,
+				Ip:    string(ip),
+				Id:    idv4,
+				Port:  int(port.Int64()),
+			})
+		}
+	}
+
+	if ma.self != nil {
+		for _, i := range nodes {
+			if i.Id == ma.self.Id {
+				input = []interface{}{ma.self.Addr}
+				if err = metclient.CallContract(ctx, srp, "isAddressInSubscriptionList", input, &srpListParam.subscribe, height); err != nil {
+					srpListParam.subscribe = false
+				}
+				break
+			}
+		}
+	}
+	// no coinbaseEnodeEntry caching
+
+	if err = metclient.CallContract(ctx, srp, "getUpdatedBlock", nil, &srpListParam.updatedBlock, height); err != nil {
+		return nil, err
+	}
+
+	// if found in cache, use it
+	if srpListCacheTemp, ok := srpListCache.Load(srpListParam.updatedBlock.Int64()); ok {
+		if ma.self != nil && srpListParam.subscribe != srpListCacheTemp.(*srpListParameters).subscribe {
+			// change subscribe status
+			srpListCacheTemp.(*srpListParameters).subscribe = srpListParam.subscribe
+			srpListCache.Store(srpListParam.updatedBlock.Int64(), srpListCacheTemp.(*srpListParameters))
+		}
+		return srpListCacheTemp.(*srpListParameters), nil
+	}
+
+	if err = metclient.CallContract(ctx, srp, "getSRPListLength", nil, &srpListParam.srpListLength, height); err != nil {
+		return nil, err
+	}
+
+	srpListParam.srpList = make([]common.Address, srpListParam.srpListLength.Uint64())
+	if err = metclient.CallContract(ctx, srp, "getSRPList", nil, &srpListParam.srpList, height); err != nil {
+		return nil, err
+	}
+
+	if err != nil {
+		err = wemixminer.ErrNotInitialized
+		return nil, err
+	}
+
+	srpListMap := make(map[common.Address]bool, srpListParam.srpListLength.Uint64())
+	for _, addr = range srpListParam.srpList {
+		srpListMap[addr] = true
+	}
+	srpListParam.srpListMap = srpListMap
+	srpListCache.Store(srpListParam.updatedBlock.Int64(), srpListParam)
+
+	return srpListParam, nil
+}
+
+func getSRPListMap(num *big.Int) (map[common.Address]bool, bool, error) {
+	st := time.Now()
+	srpListParam, err := admin.getSRPListWithCache(num)
+	et := time.Now()
+
+	if err != nil {
+		return nil, false, err
+	}
+	log.Debug("get srpList map run time", "Duration time", et.Sub(st), "srpListMap len", len(srpListParam.srpListMap))
+	return srpListParam.srpListMap, srpListParam.subscribe, err
+}
+
 func (ma *wemixAdmin) getRewardParams(ctx context.Context, height *big.Int) (*rewardParameters, error) {
 	rp := &rewardParameters{}
 	reg, gov, env, staking, err := ma.getRegGovEnvContracts(ctx, height)
@@ -797,7 +1098,11 @@ func StartAdmin(stack *node.Node, datadir string, briocheBlock *big.Int) {
 	if err != nil {
 		utils.Fatalf("Loading ABI failed: %v", err)
 	}
-
+	// Add SRP
+	srpListAbiContract, err := metclient.LoadJsonContract(strings.NewReader(SRPListAbi))
+	if err != nil {
+		utils.Fatalf("Loading ABI failed: %v", err)
+	}
 	cli := ethclient.NewClient(rpcCli)
 	admin = &wemixAdmin{
 		stack: stack,
@@ -810,6 +1115,9 @@ func StartAdmin(stack *node.Node, datadir string, briocheBlock *big.Int) {
 			Cli: cli, Abi: stakingContract.Abi},
 		envStorage: &metclient.RemoteContract{
 			Cli: cli, Abi: envStorageImpContract.Abi},
+		// Add SRP
+		srpList: &metclient.RemoteContract{
+			Cli: cli, Abi: srpListAbiContract.Abi},
 		Updates:     make(chan bool, 10),
 		rpcCli:      rpcCli,
 		cli:         cli,
@@ -1585,6 +1893,45 @@ func (ma *wemixAdmin) miners() string {
 	return ma.toMiningPeers(nodes)
 }
 
+// Add SRP
+func SRPListInfo(height rpc.BlockNumber) interface{} {
+	if admin == nil {
+		return ""
+	} else {
+		number := new(big.Int).SetUint64(0)
+
+		if height > 0 {
+			number = new(big.Int).SetUint64(uint64(height.Int64()))
+		} else {
+			number = new(big.Int).SetUint64(uint64(admin.lastBlock))
+		}
+
+		srpListParam, err := admin.getSRPListInfo(number)
+
+		if err != nil {
+			srpListInfo := map[string]interface{}{
+				"BlockNumber":         number,
+				"srpListContract":     admin.srpList.To,
+				"srpListUpdatedBlock": nil,
+				"srpListLength":       nil,
+				"srpList":             nil,
+				"srpSubscribe":        nil,
+			}
+			return srpListInfo
+		}
+		srpListInfo := map[string]interface{}{
+			"BlockNumber":         number,
+			"srpListContract":     admin.srpList.To,
+			"srpListUpdatedBlock": srpListParam.updatedBlock,
+			"srpListLength":       srpListParam.srpListLength,
+			"srpList":             srpListParam.srpListMap,
+			"srpSubscribe":        srpListParam.subscribe,
+		}
+
+		return srpListInfo
+	}
+}
+
 func Info() interface{} {
 	if admin == nil {
 		return ""
@@ -1971,6 +2318,8 @@ func init() {
 	wemixminer.AcquireMiningTokenFunc = acquireMiningToken
 	wemixminer.ReleaseMiningTokenFunc = releaseMiningToken
 	wemixminer.HasMiningTokenFunc = hasMiningToken
+	wemixminer.GetSRPListMapFunc = getSRPListMap // Add SRP
+	wemixapi.SRPListInfo = SRPListInfo           // Add SRP
 	wemixminer.GetFinalizedBlockNumberFunc = getFinalizedBlockNumber
 	wemixapi.Info = Info
 	wemixapi.GetMiners = getMiners

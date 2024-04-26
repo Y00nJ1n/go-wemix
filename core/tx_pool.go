@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	wemixminer "github.com/ethereum/go-ethereum/wemix/miner"
 )
 
 const (
@@ -95,6 +96,8 @@ var (
 var (
 	evictionInterval    = time.Minute     // Time interval to check for evictable transactions
 	statsReportInterval = 8 * time.Second // Time interval to report transaction pool stats
+	// Add SRP
+	srplistInterval = 3 * time.Hour // Time interval to check for srplist transactions
 )
 
 var (
@@ -356,12 +359,16 @@ func (pool *TxPool) loop() {
 		report  = time.NewTicker(statsReportInterval)
 		evict   = time.NewTicker(evictionInterval)
 		journal = time.NewTicker(pool.config.Rejournal)
+		// Add SRP
+		srplist = time.NewTicker(srplistInterval)
 		// Track the previous head headers for transaction reorgs
 		head = pool.chain.CurrentBlock()
 	)
 	defer report.Stop()
 	defer evict.Stop()
 	defer journal.Stop()
+	// Add SRP
+	defer srplist.Stop()
 
 	// Notify tests that the init phase is done
 	close(pool.initDoneCh)
@@ -432,6 +439,25 @@ func (pool *TxPool) loop() {
 					log.Warn("Failed to rotate local tx journal", "err", err)
 				}
 				pool.mu.Unlock()
+			}
+		// Add SRP
+		case <-srplist.C:
+			if !wemixminer.IsPoW() {
+				srpListMap, _, _ := wemixminer.GetSRPListMap(pool.chain.CurrentBlock().Number())
+				if len(srpListMap) > 0 {
+					pool.mu.Lock()
+					for addr := range pool.pending {
+						list := pool.pending[addr].Flatten()
+						for _, tx := range list {
+							if srpListMap[addr] {
+								log.Debug("Discard pending transaction included in a srplist", "hash", tx.Hash(), "addr", addr)
+								pool.removeTx(tx.Hash(), true)
+								pendingDiscardMeter.Mark(int64(1))
+							}
+						}
+					}
+					pool.mu.Unlock()
+				}
 			}
 		}
 	}
@@ -701,6 +727,16 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentState.GetNonce(from) > tx.Nonce() {
 		return ErrNonceTooLow
 	}
+	// Add SRP
+	if !wemixminer.IsPoW() {
+		srpListMap, srpListSubscribe, _ := wemixminer.GetSRPListMap(pool.chain.CurrentBlock().Number())
+		if len(srpListMap) > 0 && srpListSubscribe {
+			if srpListMap[from] {
+				return ErrIncludedSRPList
+			}
+		}
+	}
+
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
 
@@ -1409,6 +1445,13 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 	// Track the promoted transactions to broadcast them at once
 	var promoted []*types.Transaction
 
+	// Add SRP
+	var srpListMap map[common.Address]bool
+	var srpListSubscribe bool
+	if !wemixminer.IsPoW() {
+		srpListMap, srpListSubscribe, _ = wemixminer.GetSRPListMap(pool.chain.CurrentBlock().Number())
+	}
+
 	// Iterate over all accounts and promote any executable transactions
 	for _, addr := range accounts {
 		list := pool.queue[addr]
@@ -1424,6 +1467,19 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 		log.Trace("Removed old queued transactions", "count", len(forwards))
 		// Drop all transactions that are too costly (low balance or out of gas)
 		drops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
+
+		// Add SRP
+		if !wemixminer.IsPoW() {
+			if len(srpListMap) > 0 && srpListSubscribe {
+				for _, tx := range list.Flatten() {
+					if srpListMap[addr] {
+						log.Trace("Removed queued transaction included in the srplist", "hash", tx.Hash(), "addr", addr)
+						list.Remove(tx)
+						drops = append(drops, tx)
+					}
+				}
+			}
+		}
 
 		// fee delegation
 		if pool.feedelegation {
@@ -1623,6 +1679,13 @@ func (pool *TxPool) truncateQueue() {
 // is always explicitly triggered by SetBaseFee and it would be unnecessary and wasteful
 // to trigger a re-heap is this function
 func (pool *TxPool) demoteUnexecutables() {
+	// Add SRP
+	var srpListMap map[common.Address]bool
+	var srpListSubscribe bool
+	if !wemixminer.IsPoW() {
+		srpListMap, srpListSubscribe, _ = wemixminer.GetSRPListMap(pool.chain.CurrentBlock().Number())
+	}
+
 	// Iterate over all accounts and demote any non-executable transactions
 	for addr, list := range pool.pending {
 		nonce := pool.currentState.GetNonce(addr)
@@ -1636,6 +1699,19 @@ func (pool *TxPool) demoteUnexecutables() {
 		}
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
 		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
+
+		// Add SRP
+		if !wemixminer.IsPoW() {
+			if len(srpListMap) > 0 && srpListSubscribe {
+				for _, tx := range list.Flatten() {
+					if srpListMap[addr] {
+						log.Trace("Removed pending transaction included in the srplist", "hash", tx.Hash(), "addr", addr)
+						list.Remove(tx)
+						drops = append(drops, tx)
+					}
+				}
+			}
+		}
 
 		// fee delegation
 		if pool.feedelegation {
