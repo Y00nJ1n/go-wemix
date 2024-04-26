@@ -245,11 +245,6 @@ web3._extend({
 			params: 0
 		}),
 		new web3._extend.Method({
-			name: 'etcdDeleteWork',
-			call: 'admin_etcdDeleteWork',
-			params: 0
-		}),
-		new web3._extend.Method({
 			name: 'srpListInfo',
 			call: 'admin_srpListInfo',
 			params: 1,
@@ -272,6 +267,10 @@ web3._extend({
 		new web3._extend.Property({
 			name: 'wemixInfo',
 			getter: 'admin_wemixInfo'
+		}),
+		new web3._extend.Property({
+			name: 'wemixHalvingInfo',
+			getter: 'admin_wemixHalvingInfo'
 		}),
 	]
 });
@@ -561,11 +560,6 @@ web3._extend({
 			params: 2,
 		}),
 		new web3._extend.Method({
-			name: 'etcdDelete',
-			call: 'debug_etcdDelete',
-			params: 1,
-		}),
-		new web3._extend.Method({
 			name: 'dbGet',
 			call: 'debug_dbGet',
 			params: 1
@@ -579,6 +573,11 @@ web3._extend({
 			name: 'dbAncients',
 			call: 'debug_dbAncients',
 			params: 0
+		}),
+		new web3._extend.Method({
+			name: 'getFinalizedBlockNumber',
+			call: 'debug_getFinalizedBlockNumber',
+			params: 1,
 		}),
 	],
 	properties: []

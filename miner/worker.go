@@ -1598,7 +1598,8 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	if !wemixminer.IsPoW() {
 		parent := w.chain.CurrentBlock()
 		height := new(big.Int).Add(parent.Number(), common.Big1)
-		ok, err := wemixminer.AcquireMiningToken(height, parent.Hash())
+		isBrioche := w.chainConfig.IsBrioche(height)
+		ok, err := wemixminer.AcquireMiningToken(isBrioche, height, parent.Hash())
 		if ok {
 			log.Debug("Mining Token, successful", "height", height, "parent-hash", parent.Hash())
 		} else {

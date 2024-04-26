@@ -143,4 +143,229 @@ func TestDistributeRewards(t *testing.T) {
 	}
 }
 
+// TestHalvingCubingRewards tests the usedHalving,usedCubing and distributeRewards function
+func TestHalvingCubingRewards(t *testing.T) {
+	hexToAddressPtr := func(addr string) *common.Address {
+		address := common.HexToAddress(addr)
+		return &address
+	}
+
+	hexToBigInt := func(hexNum string) *big.Int {
+		if num, ok := new(big.Int).SetString(hexNum[2:], 16); ok {
+			return num
+		} else {
+			return nil
+		}
+	}
+
+	// Test cases
+	tests := []struct {
+		name    string
+		height  *big.Int
+		rp      *rewardParameters
+		fees    *big.Int
+		halving *halvingConfig
+		want    string
+	}{
+		{
+			name:   "before halving",
+			height: big.NewInt(99),
+			rp: &rewardParameters{
+				rewardAmount: big.NewInt(1000000000000000000),
+				staker:       hexToAddressPtr("0x1111111111111111111111111111111111111111"),
+				ecoSystem:    hexToAddressPtr("0x2222222222222222222222222222222222222222"),
+				maintenance:  hexToAddressPtr("0x3333333333333333333333333333333333333333"),
+				feeCollector: nil,
+				members: []*wemixMember{
+					{
+						Staker: common.HexToAddress("0x4444444444444444444444444444444444444444"),
+						Reward: common.HexToAddress("0x4444444444444444444444444444444444444444"),
+						Stake:  big.NewInt(1000),
+					},
+					{
+						Staker: common.HexToAddress("0x5555555555555555555555555555555555555555"),
+						Reward: common.HexToAddress("0x5555555555555555555555555555555555555555"),
+						Stake:  big.NewInt(1000),
+					},
+				},
+				distributionMethod: []*big.Int{big.NewInt(5000), big.NewInt(3000), big.NewInt(2000)},
+				blocksPer:          10,
+			},
+			fees: big.NewInt(100),
+			halving: &halvingConfig{
+				halvingMaxCount:      uint64(len(wemixHalvingReward) - 1),
+				halvingBlockInterval: big.NewInt(100),
+				halvingLastBlock:     big.NewInt(4000),
+				briocheBlock:         big.NewInt(100),
+			},
+			want: `[{"addr":"0x4444444444444444444444444444444444444444","reward":250000000000000000},{"addr":"0x5555555555555555555555555555555555555555","reward":250000000000000000},{"addr":"0x1111111111111111111111111111111111111111","reward":300000000000000000},{"addr":"0x2222222222222222222222222222222222222222","reward":200000000000000000},{"addr":"0x3333333333333333333333333333333333333333","reward":100}]`,
+		},
+		{
+			name:   "halving count=1",
+			height: big.NewInt(100),
+			rp: &rewardParameters{
+				rewardAmount: big.NewInt(1000000000000000000),
+				staker:       hexToAddressPtr("0x1111111111111111111111111111111111111111"),
+				ecoSystem:    hexToAddressPtr("0x2222222222222222222222222222222222222222"),
+				maintenance:  hexToAddressPtr("0x3333333333333333333333333333333333333333"),
+				feeCollector: nil,
+				members: []*wemixMember{
+					{
+						Staker: common.HexToAddress("0x4444444444444444444444444444444444444444"),
+						Reward: common.HexToAddress("0x4444444444444444444444444444444444444444"),
+						Stake:  big.NewInt(1000),
+					},
+					{
+						Staker: common.HexToAddress("0x5555555555555555555555555555555555555555"),
+						Reward: common.HexToAddress("0x5555555555555555555555555555555555555555"),
+						Stake:  big.NewInt(500),
+					},
+				},
+				distributionMethod: []*big.Int{big.NewInt(5000), big.NewInt(3000), big.NewInt(2000)},
+				blocksPer:          10,
+			},
+			fees: big.NewInt(100),
+			halving: &halvingConfig{
+				halvingMaxCount:      uint64(len(wemixHalvingReward) - 1),
+				halvingBlockInterval: big.NewInt(100),
+				halvingLastBlock:     big.NewInt(4000),
+				briocheBlock:         big.NewInt(100),
+			},
+			want: `[{"addr":"0x4444444444444444444444444444444444444444","reward":184699313116209523},{"addr":"0x5555555555555555555555555555555555555555","reward":65300686883790477},{"addr":"0x1111111111111111111111111111111111111111","reward":150000000000000000},{"addr":"0x2222222222222222222222222222222222222222","reward":100000000000000000},{"addr":"0x3333333333333333333333333333333333333333","reward":100}]`,
+		},
+		{
+			name:   "halving count=2",
+			height: big.NewInt(210),
+			rp: &rewardParameters{
+				rewardAmount: big.NewInt(1000000000000000000),
+				staker:       hexToAddressPtr("0x6f488615e6b462ce8909e9cd34c3f103994ab2fb"),
+				ecoSystem:    hexToAddressPtr("0x6bd26c4a45e7d7cac2a389142f99f12e5713d719"),
+				maintenance:  hexToAddressPtr("0x816e30b6c314ba5d1a67b1b54be944ce4554ed87"),
+				feeCollector: nil,
+				members: []*wemixMember{
+					{
+						Staker: common.HexToAddress("0x02b4b2d83786c8ee315db2ddac704794850d2149"),
+						Reward: common.HexToAddress("0x02b4b2d83786c8ee315db2ddac704794850d2149"),
+						Stake:  hexToBigInt("0x1a784379d99db42000000"),
+					},
+					{
+						Staker: common.HexToAddress("0xb16d2494fddfa4c000deaf642d47673e5ca74e07"),
+						Reward: common.HexToAddress("0xb16d2494fddfa4c000deaf642d47673e5ca74e07"),
+						Stake:  hexToBigInt("0xe8ef1e96ae3897800000"),
+					},
+					{
+						Staker: common.HexToAddress("0x452893ed818c0e3ea6f415aeab8ef08778087fc6"),
+						Reward: common.HexToAddress("0x452893ed818c0e3ea6f415aeab8ef08778087fc6"),
+						Stake:  hexToBigInt("0xc92b9a6adc4825c00000"),
+					},
+					{
+						Staker: common.HexToAddress("0xf4404494ab647d29a62c57118c3a739c521fa004"),
+						Reward: common.HexToAddress("0xf4404494ab647d29a62c57118c3a739c521fa004"),
+						Stake:  hexToBigInt("0x1a0bd7e67e11f6e00000"),
+					},
+				},
+				blocksPer:          1,
+				distributionMethod: []*big.Int{big.NewInt(4000), big.NewInt(1000), big.NewInt(2500), big.NewInt(2500)},
+			},
+			fees: hexToBigInt("0x0"),
+			halving: &halvingConfig{
+				halvingMaxCount:      uint64(len(wemixHalvingReward) - 1),
+				halvingBlockInterval: big.NewInt(100),
+				halvingLastBlock:     big.NewInt(4000),
+				briocheBlock:         big.NewInt(100),
+			},
+			want: `[{"addr":"0x02b4b2d83786c8ee315db2ddac704794850d2149","reward":57126092146969110},{"addr":"0xb16d2494fddfa4c000deaf642d47673e5ca74e07","reward":23301214098472185},{"addr":"0x452893ed818c0e3ea6f415aeab8ef08778087fc6","reward":18701434930292739},{"addr":"0xf4404494ab647d29a62c57118c3a739c521fa004","reward":871258824265966},{"addr":"0x6f488615e6b462ce8909e9cd34c3f103994ab2fb","reward":25000000000000000},{"addr":"0x6bd26c4a45e7d7cac2a389142f99f12e5713d719","reward":62500000000000000},{"addr":"0x816e30b6c314ba5d1a67b1b54be944ce4554ed87","reward":62500000000000000}]`,
+		},
+		{
+			name:   "halving count=16",
+			height: big.NewInt(1620),
+			rp: &rewardParameters{
+				rewardAmount: big.NewInt(1000000000000000000),
+				staker:       hexToAddressPtr("0xf5ed7476157980e831516cdd5493f5334a35b23e"),
+				ecoSystem:    hexToAddressPtr("0x6bd26c4a45e7d7cac2a389142f99f12e5713d719"),
+				maintenance:  hexToAddressPtr("0x816e30b6c314ba5d1a67b1b54be944ce4554ed87"),
+				feeCollector: hexToAddressPtr("0x6f488615e6b462ce8909e9cd34c3f103994ab2fb"),
+				members: []*wemixMember{
+					{
+						Staker: common.HexToAddress("0x02b4b2d83786c8ee315db2ddac704794850d2149"),
+						Reward: common.HexToAddress("0x02b4b2d83786c8ee315db2ddac704794850d2149"),
+						Stake:  hexToBigInt("0x1a784379d99db42000000"),
+					},
+					{
+						Staker: common.HexToAddress("0xb16d2494fddfa4c000deaf642d47673e5ca74e07"),
+						Reward: common.HexToAddress("0xb16d2494fddfa4c000deaf642d47673e5ca74e07"),
+						Stake:  hexToBigInt("0xe8ef1e96ae3897800000"),
+					},
+					{
+						Staker: common.HexToAddress("0x452893ed818c0e3ea6f415aeab8ef08778087fc6"),
+						Reward: common.HexToAddress("0x452893ed818c0e3ea6f415aeab8ef08778087fc6"),
+						Stake:  hexToBigInt("0xc92b9a6adc4825c00000"),
+					},
+				},
+				blocksPer:          1,
+				distributionMethod: []*big.Int{big.NewInt(4000), big.NewInt(1000), big.NewInt(2500), big.NewInt(2500)},
+			},
+			halving: &halvingConfig{
+				halvingMaxCount:      uint64(len(wemixHalvingReward) - 1),
+				halvingBlockInterval: big.NewInt(100),
+				halvingLastBlock:     big.NewInt(4000),
+				briocheBlock:         big.NewInt(100),
+			},
+			fees: hexToBigInt("0xadc5e885b956557f"),
+			want: `[{"addr":"0x02b4b2d83786c8ee315db2ddac704794850d2149","reward":3517345140055},{"addr":"0xb16d2494fddfa4c000deaf642d47673e5ca74e07","reward":1434693133845},{"addr":"0x452893ed818c0e3ea6f415aeab8ef08778087fc6","reward":1151477351100},{"addr":"0xf5ed7476157980e831516cdd5493f5334a35b23e","reward":1525878906250},{"addr":"0x6bd26c4a45e7d7cac2a389142f99f12e5713d719","reward":3814697265625},{"addr":"0x816e30b6c314ba5d1a67b1b54be944ce4554ed87","reward":3814697265625},{"addr":"0x6f488615e6b462ce8909e9cd34c3f103994ab2fb","reward":12521670000011269503}]`,
+		},
+		{
+			name:   "halving count=end",
+			height: big.NewInt(4000),
+			rp: &rewardParameters{
+				rewardAmount: big.NewInt(1000000000000000000),
+				staker:       hexToAddressPtr("0xf5ed7476157980e831516cdd5493f5334a35b23e"),
+				ecoSystem:    hexToAddressPtr("0x6bd26c4a45e7d7cac2a389142f99f12e5713d719"),
+				maintenance:  hexToAddressPtr("0x816e30b6c314ba5d1a67b1b54be944ce4554ed87"),
+				feeCollector: hexToAddressPtr("0x6f488615e6b462ce8909e9cd34c3f103994ab2fb"),
+				members: []*wemixMember{
+					{
+						Staker: common.HexToAddress("0x02b4b2d83786c8ee315db2ddac704794850d2149"),
+						Reward: common.HexToAddress("0x02b4b2d83786c8ee315db2ddac704794850d2149"),
+						Stake:  hexToBigInt("0x1a784379d99db42000000"),
+					},
+					{
+						Staker: common.HexToAddress("0xb16d2494fddfa4c000deaf642d47673e5ca74e07"),
+						Reward: common.HexToAddress("0xb16d2494fddfa4c000deaf642d47673e5ca74e07"),
+						Stake:  hexToBigInt("0xe8ef1e96ae3897800000"),
+					},
+					{
+						Staker: common.HexToAddress("0x452893ed818c0e3ea6f415aeab8ef08778087fc6"),
+						Reward: common.HexToAddress("0x452893ed818c0e3ea6f415aeab8ef08778087fc6"),
+						Stake:  hexToBigInt("0xc92b9a6adc4825c00000"),
+					},
+				},
+				blocksPer:          1,
+				distributionMethod: []*big.Int{big.NewInt(4000), big.NewInt(1000), big.NewInt(2500), big.NewInt(2500)},
+			},
+			halving: &halvingConfig{
+				halvingMaxCount:      uint64(len(wemixHalvingReward) - 1),
+				halvingBlockInterval: big.NewInt(100),
+				halvingLastBlock:     big.NewInt(4000),
+				briocheBlock:         big.NewInt(100),
+			},
+			fees: hexToBigInt("0xadc5e885b956557f"),
+			want: `[{"addr":"0x02b4b2d83786c8ee315db2ddac704794850d2149","reward":0},{"addr":"0xb16d2494fddfa4c000deaf642d47673e5ca74e07","reward":0},{"addr":"0x452893ed818c0e3ea6f415aeab8ef08778087fc6","reward":0},{"addr":"0xf5ed7476157980e831516cdd5493f5334a35b23e","reward":0},{"addr":"0x6bd26c4a45e7d7cac2a389142f99f12e5713d719","reward":0},{"addr":"0x816e30b6c314ba5d1a67b1b54be944ce4554ed87","reward":0},{"addr":"0x6f488615e6b462ce8909e9cd34c3f103994ab2fb","reward":12521670000011269503}]`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			usedHalving(tt.height, tt.rp, tt.halving)
+			usedCubing(tt.rp)
+			// Call the distributeRewards function
+			rewards, err := distributeRewards(tt.height, tt.rp, tt.fees)
+			rewardsString, _ := json.Marshal(rewards)
+			if string(rewardsString) != tt.want {
+				t.Errorf("distributeRewards() failed: %v, %v <-> %v", err, tt.want, string(rewardsString))
+			}
+		})
+	}
+}
+
 // EOF

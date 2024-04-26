@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	wemixapi "github.com/ethereum/go-ethereum/wemix/api"
+	wemixminer "github.com/ethereum/go-ethereum/wemix/miner"
 )
 
 // EthereumAPI provides an API to access Ethereum full node-related information.
@@ -300,11 +301,6 @@ func (api *AdminAPI) EtcdGetWork() (string, error) {
 	return wemixapi.EtcdGetWork()
 }
 
-// Remove the latest logged work
-func (api *AdminAPI) EtcdDeleteWork() error {
-	return wemixapi.EtcdDeleteWork()
-}
-
 // Synchronize with the given peer
 func (api *AdminAPI) SynchroniseWith(id enode.ID) error {
 	return api.eth.handler.SynchroniseWith(id)
@@ -338,7 +334,8 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 	if blockNr == rpc.LatestBlockNumber {
 		block = api.eth.blockchain.CurrentBlock()
 	} else if blockNr == rpc.FinalizedBlockNumber {
-		block = api.eth.blockchain.CurrentBlock()
+		finalizedBlockNumber, _ := wemixminer.GetFinalizedBlockNumber(api.eth.blockchain.CurrentHeader().Number)
+		block = api.eth.blockchain.GetBlockByNumber(finalizedBlockNumber.Uint64())
 	} else if blockNr == rpc.SafeBlockNumber {
 		block = api.eth.blockchain.CurrentSafeBlock()
 	} else {
@@ -418,7 +415,8 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 			if number == rpc.LatestBlockNumber {
 				block = api.eth.blockchain.CurrentBlock()
 			} else if number == rpc.FinalizedBlockNumber {
-				block = api.eth.blockchain.CurrentBlock()
+				finalizedBlockNumber, _ := wemixminer.GetFinalizedBlockNumber(api.eth.blockchain.CurrentHeader().Number)
+				block = api.eth.blockchain.GetBlockByNumber(finalizedBlockNumber.Uint64())
 			} else if number == rpc.SafeBlockNumber {
 				block = api.eth.blockchain.CurrentSafeBlock()
 			} else {

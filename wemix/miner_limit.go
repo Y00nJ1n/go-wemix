@@ -163,7 +163,7 @@ func getBlockMiner(ctx context.Context, cli *ethclient.Client, entry *coinbaseEn
 // It's reset when governance gets updated, i.e. search doesn't go back
 // beyond modifiedBlock + 1.
 // Not enforced if member count <= 2.
-func (ma *wemixAdmin) verifyMinerLimit(ctx context.Context, height *big.Int, gov *metclient.RemoteContract, coinbase *common.Address, enode []byte) (bool, error) {
+func (ma *wemixAdmin) verifyMinerLimit(ctx context.Context, isBrioche bool, height *big.Int, gov *metclient.RemoteContract, coinbase *common.Address, enode []byte) (bool, error) {
 	// parent block number
 	prev := new(big.Int).Sub(height, common.Big1)
 	e, err := getCoinbaseEnodeCache(ctx, prev, gov)
@@ -185,8 +185,10 @@ func (ma *wemixAdmin) verifyMinerLimit(ctx context.Context, height *big.Int, gov
 	var miners [][]byte
 	// the enode should not appear within the last (member count / 2) blocks
 	limit := len(e.nodes) / 2
-	if limit > int(height.Int64()-e.modifiedBlock.Int64()-1) {
-		limit = int(height.Int64() - e.modifiedBlock.Int64() - 1)
+	if !isBrioche {
+		if limit > int(height.Int64()-e.modifiedBlock.Int64()-1) {
+			limit = int(height.Int64() - e.modifiedBlock.Int64() - 1)
+		}
 	}
 	for h := new(big.Int).Set(prev); limit > 0; h, limit = h.Sub(h, common.Big1), limit-1 {
 		blockMinerEnode, err := getBlockMiner(ctx, ma.cli, e, h)
@@ -202,7 +204,7 @@ func (ma *wemixAdmin) verifyMinerLimit(ctx context.Context, height *big.Int, gov
 }
 
 // check if self is eligible to mine height block at height-1
-func (ma *wemixAdmin) isEligibleMiner(height *big.Int) (bool, error) {
+func (ma *wemixAdmin) isEligibleMiner(isBrioche bool, height *big.Int) (bool, error) {
 	var (
 		ctx   context.Context
 		enode []byte
@@ -228,8 +230,10 @@ func (ma *wemixAdmin) isEligibleMiner(height *big.Int) (bool, error) {
 	}
 	// the enode should not appear within the last (member count / 2) blocks
 	limit := len(e.nodes) / 2
-	if limit > int(height.Int64()-e.modifiedBlock.Int64()-1) {
-		limit = int(height.Int64() - e.modifiedBlock.Int64() - 1)
+	if !isBrioche {
+		if limit > int(height.Int64()-e.modifiedBlock.Int64()-1) {
+			limit = int(height.Int64() - e.modifiedBlock.Int64() - 1)
+		}
 	}
 	for h := new(big.Int).Set(prev); limit > 0; h, limit = h.Sub(h, common.Big1), limit-1 {
 		blockMinerEnode, err := getBlockMiner(ctx, ma.cli, e, h)
@@ -350,6 +354,39 @@ func (ma *wemixAdmin) electNextMiner(height *big.Int) error {
 	}
 	log.Error("failed to elect a new miner", "height", height.Uint64()+1, "took", time.Since(tstart))
 	return nil
+}
+
+func getFinalizedBlockNumber(height *big.Int) (*big.Int, error) {
+	prev := new(big.Int).Sub(height, common.Big1)
+	if admin == nil {
+		return prev, wemixminer.ErrNotInitialized
+	}
+	var (
+		ctx context.Context
+		gov *metclient.RemoteContract
+		err error
+	)
+	ctx = context.Background()
+	if _, gov, _, _, err = admin.getRegGovEnvContracts(ctx, prev); err != nil {
+		return prev, wemixminer.ErrNotInitialized
+	}
+	e, err := getCoinbaseEnodeCache(ctx, prev, gov)
+	if err != nil {
+		return prev, err
+	}
+	// if count <= 2, not enforced
+	if len(e.nodes) <= 2 {
+		return prev, nil
+	}
+	// with the max compromised node count to be less than n / 2,
+	// max finality is n / 2 + 1
+	finality := len(e.nodes)/2 + 1
+	finalizedBlockNumber := new(big.Int).Set(height)
+	finalizedBlockNumber.Sub(finalizedBlockNumber, big.NewInt(int64(finality)))
+	if finalizedBlockNumber.Cmp(big0) < 0 {
+		finalizedBlockNumber = big0
+	}
+	return finalizedBlockNumber, nil
 }
 
 func refreshCoinbaseEnodeCache(height *big.Int) {

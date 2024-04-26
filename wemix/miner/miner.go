@@ -16,20 +16,21 @@ var (
 	AmPartnerFunc               func() bool
 	IsPartnerFunc               func(string) bool
 	AmHubFunc                   func(string) int
-	CalculateRewardsFunc        func(*big.Int, *big.Int, *big.Int, func(common.Address, *big.Int)) (*common.Address, []byte, error)
+	CalculateRewardsFunc        func(bool, *big.Int, *big.Int, *big.Int, func(common.Address, *big.Int)) (*common.Address, []byte, error)
 	VerifyRewardsFunc           func(*big.Int, string) error
 	GetCoinbaseFunc             func(height *big.Int) (coinbase common.Address, err error)
 	SignBlockFunc               func(height *big.Int, hash common.Hash) (coinbase common.Address, sig []byte, err error)
-	VerifyBlockSigFunc          func(height *big.Int, coinbase common.Address, nodeId []byte, hash common.Hash, sig []byte, checkMinerLimit bool) bool
+	VerifyBlockSigFunc          func(isBrioche bool, height *big.Int, coinbase common.Address, nodeId []byte, hash common.Hash, sig []byte, checkMinerLimit bool) bool
 	RequirePendingTxsFunc       func() bool
 	VerifyBlockRewardsFunc      func(height *big.Int) interface{}
 	SuggestGasPriceFunc         func() *big.Int
 	GetBlockBuildParametersFunc func(height *big.Int) (blockInterval int64, maxBaseFee, gasLimit *big.Int, baseFeeMaxChangeRate, gasTargetPercentage int64, err error)
-	AcquireMiningTokenFunc      func(height *big.Int, parentHash common.Hash) (bool, error)
+	AcquireMiningTokenFunc      func(isBrioche bool, height *big.Int, parentHash common.Hash) (bool, error)
 	ReleaseMiningTokenFunc      func(height *big.Int, hash, parentHash common.Hash) error
 	HasMiningTokenFunc          func() bool
 	// Add SRP
 	GetSRPListMapFunc func(height *big.Int) (srpListMap map[common.Address]bool, srpListSubscribe bool, err error)
+	GetFinalizedBlockNumberFunc func(height *big.Int) (*big.Int, error)
 )
 
 func IsPartner(id string) bool {
@@ -56,11 +57,11 @@ func AmHub(id string) int {
 	}
 }
 
-func AcquireMiningToken(height *big.Int, parentHash common.Hash) (bool, error) {
+func AcquireMiningToken(isBrioche bool, height *big.Int, parentHash common.Hash) (bool, error) {
 	if AcquireMiningTokenFunc == nil {
 		return false, ErrNotInitialized
 	}
-	return AcquireMiningTokenFunc(height, parentHash)
+	return AcquireMiningTokenFunc(isBrioche, height, parentHash)
 }
 
 func ReleaseMiningToken(height *big.Int, hash, parentHash common.Hash) error {
@@ -81,11 +82,11 @@ func IsPoW() bool {
 	return params.ConsensusMethod == params.ConsensusPoW
 }
 
-func CalculateRewards(num, blockReward, fees *big.Int, addBalance func(common.Address, *big.Int)) (*common.Address, []byte, error) {
+func CalculateRewards(isBrioche bool, num, blockReward, fees *big.Int, addBalance func(common.Address, *big.Int)) (*common.Address, []byte, error) {
 	if CalculateRewardsFunc == nil {
 		return nil, nil, ErrNotInitialized
 	} else {
-		return CalculateRewardsFunc(num, blockReward, fees, addBalance)
+		return CalculateRewardsFunc(isBrioche, num, blockReward, fees, addBalance)
 	}
 }
 
@@ -115,11 +116,11 @@ func SignBlock(height *big.Int, hash common.Hash) (coinbase common.Address, sig 
 	return
 }
 
-func VerifyBlockSig(height *big.Int, coinbase common.Address, nodeId []byte, hash common.Hash, sig []byte, checkMinerLimit bool) bool {
+func VerifyBlockSig(isBrioche bool, height *big.Int, coinbase common.Address, nodeId []byte, hash common.Hash, sig []byte, checkMinerLimit bool) bool {
 	if VerifyBlockSigFunc == nil {
 		return false
 	} else {
-		return VerifyBlockSigFunc(height, coinbase, nodeId, hash, sig, checkMinerLimit)
+		return VerifyBlockSigFunc(isBrioche, height, coinbase, nodeId, hash, sig, checkMinerLimit)
 	}
 }
 
@@ -165,6 +166,14 @@ func GetSRPListMap(height *big.Int) (srpList map[common.Address]bool, srpListSub
 		srpList, srpListSubscribe, err = GetSRPListMapFunc(height)
 	}
 	return
+}
+
+func GetFinalizedBlockNumber(height *big.Int) (*big.Int, error) {
+	if GetFinalizedBlockNumberFunc == nil {
+		return nil, ErrNotInitialized
+	} else {
+		return GetFinalizedBlockNumberFunc(height)
+	}
 }
 
 // EOF

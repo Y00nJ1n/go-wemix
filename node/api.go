@@ -339,6 +339,11 @@ func (api *adminAPI) WemixNodes(node string, timeout int) interface{} {
 	return wemixapi.GetMiners(node, timeout)
 }
 
+// WemixHalvingInfo retrieves the information about Wemix
+func (api *adminAPI) WemixHalvingInfo() interface{} {
+	return wemixapi.WemixHalvingInfo()
+}
+
 // web3API offers helper utils
 type web3API struct {
 	stack *Node

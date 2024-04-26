@@ -397,7 +397,8 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isCon
 	utils.StartNode(ctx, stack, isConsole)
 
 	// Start wemix admin
-	wemix.StartAdmin(stack, ctx.String(utils.DataDirFlag.Name))
+	briocheBlock := backend.ChainConfig().BriocheBlock
+	wemix.StartAdmin(stack, ctx.String(utils.DataDirFlag.Name), briocheBlock)
 
 	// Unlock any account specifically requested
 	unlockAccounts(ctx, stack)

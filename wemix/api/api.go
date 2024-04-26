@@ -47,12 +47,12 @@ var (
 	EtcdJoin         func(cluster string) error
 	EtcdMoveLeader   func(name string) error
 	EtcdGetWork      func() (string, error)
-	EtcdDeleteWork   func() error
 
 	// for debugging
-	EtcdPut    func(string, string) error
-	EtcdGet    func(string) (string, error)
-	EtcdDelete func(string) error
+	EtcdPut func(string, string) error
+	EtcdGet func(string) (string, error)
+
+	WemixHalvingInfo func() interface{}
 )
 
 func (s *WemixMinerStatus) Clone() *WemixMinerStatus {
