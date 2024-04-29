@@ -29,7 +29,7 @@ var (
 	ReleaseMiningTokenFunc      func(height *big.Int, hash, parentHash common.Hash) error
 	HasMiningTokenFunc          func() bool
 	// Add SRP
-	GetSRPListMapFunc func(height *big.Int) (srpListMap map[common.Address]bool, srpListSubscribe bool, err error)
+	GetSRPListMapFunc           func(height *big.Int) (srpListMap map[common.Address]bool, srpListSubscribe bool, err error)
 	GetFinalizedBlockNumberFunc func(height *big.Int) (*big.Int, error)
 )
 
